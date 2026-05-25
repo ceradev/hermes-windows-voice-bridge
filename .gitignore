@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# State / Secrets (NEVER commit these)
+state/voice.env
+state/session.json
+state/session.secrets
+state/runtime_state.json
+state/runtime_signal.json
+state/voice.control.json
+state/logs/
+
+# Build artifacts
+*.zip
+*.tar.gz
+*.exe
+
+# Legacy web panel (node_modules are huge, keep source only)
+panel-web/node_modules/
