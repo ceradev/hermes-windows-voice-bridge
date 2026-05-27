@@ -18,13 +18,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from hermes_voice_bridge.core.config import ConfigService
-from hermes_voice_bridge.core.events import EventBus
-from hermes_voice_bridge.core.lifecycle import AppLifecycle
-from hermes_voice_bridge.core.logging import BridgeLogger, LogPaths
-from hermes_voice_bridge.core.session import build_session_manager
-from hermes_voice_bridge.core.state import AppStateStore
-from hermes_voice_bridge.storage.cache import JsonRuntimeSignalStore, JsonRuntimeStateStore
+from src.core.config import ConfigService
+from src.core.events import EventBus
+from src.core.lifecycle import AppLifecycle
+from src.core.logging import BridgeLogger, LogPaths
+from src.core.session import build_session_manager
+from src.core.state import AppStateStore
+from src.storage.cache import JsonRuntimeSignalStore, JsonRuntimeStateStore
 from windows_hermes_voice_control import (
     TRAY_MUTEX_NAME,
     acquire_single_instance_mutex,

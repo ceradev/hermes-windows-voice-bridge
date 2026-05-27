@@ -37,8 +37,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Deque, Iterable, List, Optional, Tuple
 
-from hermes_voice_bridge.storage.cache import JsonRuntimeSignalStore
-from hermes_voice_bridge.core.session import build_session_manager
+from src.services.audio.audio_service import AudioService
+from src.storage.cache import JsonRuntimeSignalStore
+from src.core.session import build_session_manager
 from windows_hermes_voice_control import acquire_single_instance_mutex, release_single_instance_mutex, BRIDGE_MUTEX_NAME
 
 try:
@@ -123,6 +124,8 @@ class Config:
     energy_threshold: float
     silence_rms: float
     device: Optional[int]
+    device_name: str
+    device_hostapi: Optional[int]
     hotkey: str
     feedback_mode: str
     feedback_voice: str
@@ -182,6 +185,8 @@ def load_config() -> Config:
         energy_threshold=float(env("HERMES_WAKE_ENERGY", "0.008")),
         silence_rms=float(env("HERMES_SILENCE_RMS", "0.008")),
         device=optional_int_env("HERMES_MIC_DEVICE"),
+        device_name=env("HERMES_MIC_DEVICE_NAME", ""),
+        device_hostapi=optional_int_env("HERMES_MIC_DEVICE_HOSTAPI"),
         hotkey=env("HERMES_HOTKEY", DEFAULT_HOTKEY).lower(),
         feedback_mode=env("HERMES_FEEDBACK_MODE", "both").lower(),
         feedback_voice=env("HERMES_FEEDBACK_VOICE", "").strip(),
@@ -726,31 +731,96 @@ def main() -> int:
     busy_until = 0.0
     hotkey_event = threading.Event()
     hotkey_enabled = start_hotkey_listener(cfg.hotkey, hotkey_event)
+    audio_service = AudioService(sample_rate=SAMPLE_RATE, channels=CHANNELS)
+    last_device_signature = None
 
     for line in startup_status_lines(cfg, hotkey_enabled):
         print(line)
 
-    extra = None
-    if cfg.device is not None:
-        extra = sd.InputStream(device=cfg.device, samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32", blocksize=blocksize)
-    else:
-        extra = sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32", blocksize=blocksize)
+    while True:
+        try:
+            stream = audio_service.create_stream(
+                cfg.device,
+                cfg.block_seconds,
+                preferred_name=cfg.device_name,
+                preferred_hostapi=cfg.device_hostapi,
+            )
+            selected_device = audio_service.last_selected_device
+            selection_reason = audio_service.last_selection_reason
+            device_signature = (
+                selected_device.get("index") if selected_device else None,
+                selection_reason,
+            )
+            if device_signature != last_device_signature:
+                last_device_signature = device_signature
+                print(
+                    f"[mic] using {audio_service.describe_device(selected_device)}"
+                    + (f" via {selection_reason}" if selection_reason else "")
+                )
+        except Exception as exc:
+            print(f"[bridge] microphone unavailable: {exc}")
+            emit_runtime_signal("warn", "Microphone unavailable", str(exc))
+            time.sleep(1.0)
+            continue
 
-    with extra as stream:
-        while True:
-            try:
-                block, _overflow = stream.read(blocksize)
-                audio = block[:, 0].astype(np.float32).copy()
-                rolling.append(audio)
+        with stream:
+            rolling.clear()
+            while True:
+                try:
+                    block, _overflow = stream.read(blocksize)
+                    audio = block[:, 0].astype(np.float32).copy()
+                    rolling.append(audio)
 
-                now = time.monotonic()
-                if now < busy_until:
-                    continue
+                    now = time.monotonic()
+                    if now < busy_until:
+                        continue
 
-                if hotkey_event.is_set():
-                    hotkey_event.clear()
-                    print(f"Hotkey detected: {cfg.hotkey}")
-                    emit_runtime_signal("listening", "● Listening…", f"Hotkey {cfg.hotkey}")
+                    if hotkey_event.is_set():
+                        hotkey_event.clear()
+                        print(f"Hotkey detected: {cfg.hotkey}")
+                        emit_runtime_signal("listening", "● Listening…", f"Hotkey {cfg.hotkey}")
+                        feedback.pulse("Te escucho")
+                        print("Recording command...")
+                        command_audio = record_command(
+                            stream,
+                            blocksize,
+                            cfg.silence_rms,
+                            cfg.silence_timeout_seconds,
+                            cfg.max_command_seconds,
+                        )
+                        if command_audio.size == 0:
+                            print("No command heard.")
+                            emit_runtime_signal("idle", "Ready", "No command heard")
+                            busy_until = time.monotonic() + 1.0
+                            continue
+
+                        emit_runtime_signal("transcribing", "Transcribing…", "Local Whisper processing")
+                        command_text = model_transcribe(model, command_audio, cfg.language)
+                        if not command_text:
+                            print("Empty transcript.")
+                            emit_runtime_signal("idle", "Ready", "Empty transcript")
+                            busy_until = time.monotonic() + 1.0
+                            continue
+
+                        emit_runtime_signal("transcribed", "Transcript captured", command_text[:160], command_text=command_text[:240])
+                        handle_transcribed_command(cfg, feedback, command_text)
+                        print()
+                        busy_until = time.monotonic() + 1.5
+                        continue
+
+                    level = rms(audio)
+                    if level < cfg.energy_threshold:
+                        continue
+                    if len(rolling) < wake_blocks:
+                        continue
+
+                    window = np.concatenate(list(rolling))
+                    wake_text = model_transcribe(model, window, cfg.language, vad_filter=False)
+                    if not contains_wake_phrase(wake_text, cfg.wake_phrases):
+                        continue
+
+                    print(f"Wake detected: {wake_text!r}")
+                    emit_runtime_signal("listening", "● Listening…", f"Wake phrase: {wake_text[:120]}")
                     feedback.pulse("Te escucho")
                     print("Recording command...")
                     command_audio = record_command(
@@ -778,53 +848,12 @@ def main() -> int:
                     handle_transcribed_command(cfg, feedback, command_text)
                     print()
                     busy_until = time.monotonic() + 1.5
-                    continue
-
-                level = rms(audio)
-                if level < cfg.energy_threshold:
-                    continue
-                if len(rolling) < wake_blocks:
-                    continue
-
-                window = np.concatenate(list(rolling))
-                wake_text = model_transcribe(model, window, cfg.language, vad_filter=False)
-                if not contains_wake_phrase(wake_text, cfg.wake_phrases):
-                    continue
-
-                print(f"Wake detected: {wake_text!r}")
-                emit_runtime_signal("listening", "● Listening…", f"Wake phrase: {wake_text[:120]}")
-                feedback.pulse("Te escucho")
-                print("Recording command...")
-                command_audio = record_command(
-                    stream,
-                    blocksize,
-                    cfg.silence_rms,
-                    cfg.silence_timeout_seconds,
-                    cfg.max_command_seconds,
-                )
-                if command_audio.size == 0:
-                    print("No command heard.")
-                    emit_runtime_signal("idle", "Ready", "No command heard")
-                    busy_until = time.monotonic() + 1.0
-                    continue
-
-                emit_runtime_signal("transcribing", "Transcribing…", "Local Whisper processing")
-                command_text = model_transcribe(model, command_audio, cfg.language)
-                if not command_text:
-                    print("Empty transcript.")
-                    emit_runtime_signal("idle", "Ready", "Empty transcript")
-                    busy_until = time.monotonic() + 1.0
-                    continue
-
-                emit_runtime_signal("transcribed", "Transcript captured", command_text[:160], command_text=command_text[:240])
-                handle_transcribed_command(cfg, feedback, command_text)
-                print()
-                busy_until = time.monotonic() + 1.5
-            except Exception as exc:
-                print(f"[bridge] loop error: {exc}")
-                print(traceback.format_exc().rstrip())
-                emit_runtime_signal("error", "Bridge loop error", str(exc))
-                time.sleep(1.0)
+                except Exception as exc:
+                    print(f"[bridge] loop error: {exc}")
+                    print(traceback.format_exc().rstrip())
+                    emit_runtime_signal("error", "Bridge loop error", str(exc))
+                    time.sleep(0.2)
+                    break
 
 
 

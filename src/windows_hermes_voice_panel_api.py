@@ -14,8 +14,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 from urllib.parse import urlparse
 
-from hermes_voice_bridge.core.session import SessionRecord, build_session_manager
-from hermes_voice_bridge.storage.cache import JsonRuntimeSignalStore, JsonRuntimeStateStore
+from src.services.audio.audio_service import AudioService
+from src.core.session import SessionRecord, build_session_manager
+from src.storage.cache import JsonRuntimeSignalStore, JsonRuntimeStateStore
 from windows_hermes_voice_control import (
     BRIDGE_MUTEX_NAME,
     TRAY_MUTEX_NAME,
@@ -54,9 +55,12 @@ APP_VERSION = "0.2.0"
 RUNTIME_STATE_STORE = JsonRuntimeStateStore(RUNTIME_STATE_FILE)
 RUNTIME_SIGNAL_STORE = JsonRuntimeSignalStore(RUNTIME_SIGNAL_FILE)
 SESSION_MANAGER = build_session_manager(STATE_DIR)
+AUDIO_SERVICE = AudioService()
 
 CONFIG_KEYS = {
     "mic_device": "HERMES_MIC_DEVICE",
+    "mic_device_name": "HERMES_MIC_DEVICE_NAME",
+    "mic_device_hostapi": "HERMES_MIC_DEVICE_HOSTAPI",
     "hotkey": "HERMES_HOTKEY",
     "feedback_mode": "HERMES_FEEDBACK_MODE",
     "feedback_voice": "HERMES_FEEDBACK_VOICE",
@@ -98,6 +102,8 @@ def _semantic_state(paused: bool, tray_running: bool, bridge_running: bool, last
 def _safe_env(env: Dict[str, str]) -> Dict[str, str]:
     return {
         "mic_device": env.get("HERMES_MIC_DEVICE", "") or "",
+        "mic_device_name": env.get("HERMES_MIC_DEVICE_NAME", "") or "",
+        "mic_device_hostapi": env.get("HERMES_MIC_DEVICE_HOSTAPI", "") or "",
         "hotkey": env.get("HERMES_HOTKEY", "(default)") or "(default)",
         "feedback_mode": env.get("HERMES_FEEDBACK_MODE", "(default)") or "(default)",
         "feedback_voice": env.get("HERMES_FEEDBACK_VOICE", "") or "",
@@ -127,37 +133,12 @@ def _safe_env(env: Dict[str, str]) -> Dict[str, str]:
 def _list_audio_devices() -> Dict[str, Any]:
     if sd is None:
         return {"devices": [], "default_input": None, "error": "sounddevice/PortAudio not available"}
-    try:
-        devices = sd.query_devices()
-    except Exception as exc:  # pragma: no cover - hardware/runtime specific
-        return {"devices": [], "default_input": None, "error": str(exc)}
-
-    default_input = None
-    try:
-        default = sd.default.device
-        if isinstance(default, (tuple, list)) and default:
-            default_input = default[0]
-        elif isinstance(default, int):
-            default_input = default
-    except Exception:
-        default_input = None
-
-    result: List[Dict[str, Any]] = []
-    for idx, dev in enumerate(devices):
-        max_input = int(dev.get("max_input_channels", 0) or 0)
-        if max_input <= 0:
-            continue
-        result.append(
-            {
-                "index": idx,
-                "name": dev.get("name", f"Device {idx}"),
-                "max_input_channels": max_input,
-                "default_samplerate": float(dev.get("default_samplerate") or 0),
-                "hostapi": dev.get("hostapi"),
-                "selected": idx == default_input,
-            }
-        )
-    return {"devices": result, "default_input": default_input, "error": ""}
+    devices = AUDIO_SERVICE.get_devices()
+    default_input = next((device["index"] for device in devices if device.get("selection_reason") == "system_default"), None)
+    error = ""
+    if not any(device.get("usable") for device in devices):
+        error = next((device.get("last_error") for device in devices if device.get("last_error")), "No usable microphone detected")
+    return {"devices": devices, "default_input": default_input, "error": error}
 
 
 def _load_runtime_snapshot() -> Dict[str, Any] | None:
@@ -428,6 +409,19 @@ def _normalize_config_updates(payload: Dict[str, Any]) -> Dict[str, str]:
             updates[env_key] = "" if text in {"", "default", "none", "-1"} else str(int(text))
         else:
             updates[env_key] = str(value).strip()
+
+    if "HERMES_MIC_DEVICE" in updates:
+        selected_value = updates["HERMES_MIC_DEVICE"]
+        if not selected_value:
+            updates["HERMES_MIC_DEVICE_NAME"] = ""
+            updates["HERMES_MIC_DEVICE_HOSTAPI"] = ""
+        else:
+            selected_index = int(selected_value)
+            selected_device = next((device for device in AUDIO_SERVICE.get_devices() if device.get("index") == selected_index), None)
+            if selected_device:
+                updates["HERMES_MIC_DEVICE_NAME"] = str(selected_device.get("name", ""))
+                hostapi = selected_device.get("hostapi")
+                updates["HERMES_MIC_DEVICE_HOSTAPI"] = "" if hostapi is None else str(hostapi)
     return updates
 
 
