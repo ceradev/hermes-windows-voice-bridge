@@ -1,3 +1,3 @@
-from .secure_store import SecureValueStore
+from src.platform.windows import SecureValueStore
 
 __all__ = ["SecureValueStore"]

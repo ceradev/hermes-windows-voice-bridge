@@ -1,4 +1,3 @@
-from .signals import OverlaySignal, derive_overlay_signal
-from .status_overlay import StatusOverlayWindow
+from src.ui.overlays import OverlaySignal, StatusOverlayWindow, derive_overlay_signal
 
 __all__ = ["OverlaySignal", "StatusOverlayWindow", "derive_overlay_signal"]

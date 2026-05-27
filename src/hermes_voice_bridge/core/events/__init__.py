@@ -1,3 +1,3 @@
-from .event_bus import Event, EventBus
+from src.core.events import Event, EventBus
 
 __all__ = ["Event", "EventBus"]
