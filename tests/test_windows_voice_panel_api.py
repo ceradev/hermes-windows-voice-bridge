@@ -134,6 +134,22 @@ def test_normalize_config_updates_maps_known_fields():
     assert "unknown" not in updates
 
 
+def test_normalize_config_updates_persists_selected_mic_identity(monkeypatch):
+    monkeypatch.setattr(
+        panel_api.AUDIO_SERVICE,
+        "get_devices",
+        lambda: [
+            {"index": 3, "name": "USB Headset", "hostapi": 2, "usable": True},
+        ],
+    )
+
+    updates = panel_api._normalize_config_updates({"mic_device": "3"})
+
+    assert updates["HERMES_MIC_DEVICE"] == "3"
+    assert updates["HERMES_MIC_DEVICE_NAME"] == "USB Headset"
+    assert updates["HERMES_MIC_DEVICE_HOSTAPI"] == "2"
+
+
 def test_save_and_logout_persisted_session_roundtrip(tmp_path, monkeypatch):
     _patch_state_paths(tmp_path, monkeypatch)
 
