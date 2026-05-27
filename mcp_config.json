@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "command": "C:\\Users\\cesar\\AppData\\Roaming\\npm\\codegraph.cmd",
+      "args": [
+        "serve",
+        "--mcp",
+        "--path",
+        "C:\\Users\\cesar\\Desktop\\Files\\Work\\Projects\\Personal\\hermes-windows-voice-bridge"
+      ]
+    }
+  }
+}
