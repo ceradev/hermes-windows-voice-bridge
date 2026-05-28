@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import secrets
 import subprocess
 import sys
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from src.services.audio.audio_service import AudioService
@@ -56,6 +57,45 @@ RUNTIME_STATE_STORE = JsonRuntimeStateStore(RUNTIME_STATE_FILE)
 RUNTIME_SIGNAL_STORE = JsonRuntimeSignalStore(RUNTIME_SIGNAL_FILE)
 SESSION_MANAGER = build_session_manager(STATE_DIR)
 AUDIO_SERVICE = AudioService()
+
+_panel_token_value = os.environ.get("HERMES_PANEL_TOKEN", "").strip()
+if not _panel_token_value:
+    token_path = STATE_DIR / ".panel_token"
+    if token_path.exists():
+        _panel_token_value = token_path.read_text(encoding="utf-8").strip()
+    else:
+        _panel_token_value = secrets.token_urlsafe(32)
+        token_path.write_text(_panel_token_value, encoding="utf-8")
+_PANEL_TOKEN = _panel_token_value
+
+# Simple per-IP rate limiter: ip -> (count, window_start)
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_MAX = 120    # requests per window
+_rate_limit_store: Dict[str, Tuple[int, float]] = {}
+
+
+def _check_rate_limit(client_ip: str) -> bool:
+    now = time.time()
+    count, window_start = _rate_limit_store.get(client_ip, (0, now))
+    if now - window_start > _RATE_LIMIT_WINDOW:
+        _rate_limit_store[client_ip] = (1, now)
+        return True
+    if count >= _RATE_LIMIT_MAX:
+        return False
+    _rate_limit_store[client_ip] = (count + 1, window_start)
+    return True
+
+
+def _check_panel_token(handler: BaseHTTPRequestHandler) -> bool:
+    token = handler.headers.get("X-Hermes-Panel-Token", "").strip()
+    return token == _PANEL_TOKEN
+
+
+def _local_origin(origin: str) -> bool:
+    if not origin:
+        return True
+    return origin.startswith(("http://localhost:", "http://127.0.0.1:", "https://localhost:", "https://127.0.0.1:", "app://", "file://", "null"))
+
 
 CONFIG_KEYS = {
     "mic_device": "HERMES_MIC_DEVICE",
@@ -431,13 +471,25 @@ class PanelApiHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         return
 
+    def _client_ip(self) -> str:
+        forwarded = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        return forwarded or self.client_address[0]
+
+    def _check_rate_limit(self) -> bool:
+        return _check_rate_limit(self._client_ip())
+
+    def _require_token(self) -> bool:
+        return _check_panel_token(self)
+
     def _send_json(self, payload: Dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         data = _json_bytes(payload)
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self.headers.get("Origin", "")
+        if _local_origin(origin):
+            self.send_header("Access-Control-Allow-Origin", origin or "http://127.0.0.1")
         self.end_headers()
         self.wfile.write(data)
 
@@ -447,18 +499,28 @@ class PanelApiHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self.headers.get("Origin", "")
+        if _local_origin(origin):
+            self.send_header("Access-Control-Allow-Origin", origin or "http://127.0.0.1")
         self.end_headers()
         self.wfile.write(data)
 
     def do_OPTIONS(self) -> None:
+        origin = self.headers.get("Origin", "")
+        if not _local_origin(origin):
+            self.send_response(HTTPStatus.FORBIDDEN)
+            self.end_headers()
+            return
         self.send_response(HTTPStatus.NO_CONTENT)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", origin or "http://127.0.0.1")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Hermes-Panel-Token")
         self.end_headers()
 
     def do_GET(self) -> None:
+        if not self._check_rate_limit():
+            self._send_json({"ok": False, "error": "rate limit exceeded"}, status=HTTPStatus.TOO_MANY_REQUESTS)
+            return
         path = urlparse(self.path).path
         if path == "/api/status":
             self._send_json(_build_snapshot())
@@ -480,7 +542,9 @@ class PanelApiHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Connection", "keep-alive")
-            self.send_header("Access-Control-Allow-Origin", "*")
+            origin = self.headers.get("Origin", "")
+            if _local_origin(origin):
+                self.send_header("Access-Control-Allow-Origin", origin or "http://127.0.0.1")
             self.end_headers()
             try:
                 while True:
@@ -513,6 +577,12 @@ class PanelApiHandler(BaseHTTPRequestHandler):
         self._send_text("Hermes Voice Bridge control API is running. Open the desktop app to view it.")
 
     def do_POST(self) -> None:
+        if not self._check_rate_limit():
+            self._send_json({"ok": False, "error": "rate limit exceeded"}, status=HTTPStatus.TOO_MANY_REQUESTS)
+            return
+        if not self._require_token():
+            self._send_json({"ok": False, "error": "unauthorized"}, status=HTTPStatus.UNAUTHORIZED)
+            return
         path = urlparse(self.path).path
         action = path.removeprefix("/api/action/")
         if not action:
