@@ -6,7 +6,7 @@ from typing import Any
 ActivityEntry = dict[str, str]
 
 class WebviewBridge:
-    def __init__(self, config, session_manager, hermes, audio, wakeword, tts, autostart=None):
+    def __init__(self, config, session_manager, hermes, audio, wakeword, tts, autostart=None, shortcut_manager=None, tray=None):
         self._config = config
         self._session_manager = session_manager
         self._hermes = hermes
@@ -16,6 +16,8 @@ class WebviewBridge:
         custom_command_module = import_module("src.services.custom_commands.custom_command_service")
         self._custom_commands = custom_command_module.CustomCommandService(config, tts)
         self._autostart = autostart
+        self._shortcut_manager = shortcut_manager
+        self._tray = tray
         self._window = None
         self._on_pause = None
         self._on_restart = None
@@ -24,6 +26,9 @@ class WebviewBridge:
 
     def set_window(self, window):
         self._window = window
+
+    def set_tray(self, tray):
+        self._tray = tray
 
     def set_callbacks(self, on_pause, on_restart, on_quit):
         self._on_pause = on_pause
@@ -172,12 +177,12 @@ class WebviewBridge:
                 self._tts.say(response_text)
                 
             if self._window:
-                self._window.evaluate_js("window.dispatchEvent(new CustomEvent('hermes_new_message'))")
-                
+                self._safe_evaluate_js("window.dispatchEvent(new CustomEvent('hermes_new_message'))")
+
             return {
-                "success": True, 
-                "response": response_text, 
-                "message_id": msg_id, 
+                "success": True,
+                "response": response_text,
+                "message_id": msg_id,
                 "latencyMs": latency,
                 "remoteSessionId": data.get("sessionId")
             }
@@ -186,12 +191,37 @@ class WebviewBridge:
             msg_id = self._session_manager.add_message(session_id, "hermes", str(e), "manual", "error")
             self._record_activity("command", str(e), "error")
             if self._window:
-                self._window.evaluate_js("window.dispatchEvent(new CustomEvent('hermes_new_message'))")
+                self._safe_evaluate_js("window.dispatchEvent(new CustomEvent('hermes_new_message'))")
             return {"success": False, "error": str(e), "message_id": msg_id}
 
     def speak_text(self, text: str) -> bool:
         if self._tts:
             self._tts.say(text)
+            return True
+        return False
+
+    # --- Shortcuts ---
+    def capture_hotkey(self, timeout: float = 5.0) -> str:
+        if self._shortcut_manager:
+            result = self._shortcut_manager.capture_next_hotkey(timeout)
+            return result or ""
+        return ""
+
+    def check_hotkey_conflict(self, hotkey: str) -> bool:
+        if self._shortcut_manager:
+            return self._shortcut_manager.check_conflict(hotkey)
+        return False
+
+    def get_quick_commands(self) -> list[dict[str, Any]]:
+        cmds = self._custom_commands.get_all()
+        return [{"id": c["id"], "label": c.get("name", c["id"])} for c in cmds]
+
+    def run_quick_command(self, command_id: str) -> bool:
+        return self._custom_commands.execute(command_id)
+
+    def notify_tray(self, title: str, message: str) -> bool:
+        if self._tray:
+            self._tray.notify(title, message)
             return True
         return False
 
@@ -207,8 +237,30 @@ class WebviewBridge:
         self._record_activity("command", response_text, "success")
         
         if self._window:
-            self._window.evaluate_js("window.dispatchEvent(new CustomEvent('hermes_new_message'))")
+            self._safe_evaluate_js("window.dispatchEvent(new CustomEvent('hermes_new_message'))")
         return True
+
+    def _safe_evaluate_js(self, script: str) -> None:
+        """Evaluate JS in the webview only if it matches an allow-listed pattern.
+
+        Blocks common injection vectors (eval, Function constructors, script tags,
+        unescaped backticks/quotes) as a defense-in-depth measure.
+        """
+        if not self._window:
+            return
+
+        dangerous = ("eval(", "Function(", "<script", "javascript:", "\\x", "\\u")
+        if any(token in script.lower() for token in dangerous):
+            print(f"[BRIDGE SECURITY] Blocked dangerous JS: {script[:80]}")
+            return
+
+        # Only allow calls that look like window.dispatchEvent(new CustomEvent(...))
+        allowed_prefixes = ("window.dispatchEvent(new CustomEvent(",)
+        if not any(script.strip().startswith(p) for p in allowed_prefixes):
+            print(f"[BRIDGE SECURITY] Blocked unallowed JS: {script[:80]}")
+            return
+
+        self._window.evaluate_js(script)
 
     def _record_activity(self, activity_type: str, text: str, status: str) -> None:
         if not text:

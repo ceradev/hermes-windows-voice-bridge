@@ -1,4 +1,5 @@
 import json
+import ssl
 import urllib.request
 import urllib.error
 import time
@@ -36,23 +37,26 @@ class HermesClient:
         data = None
         if payload is not None:
             data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-            
+
         req = urllib.request.Request(
             url,
             data=data,
             headers=self._get_headers(),
             method=method
         )
-        
+
+        # Explicit SSL context with certificate verification enabled
+        ssl_context = ssl.create_default_context()
+
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout, context=ssl_context) as resp:
                 status = resp.status
                 response_text = resp.read().decode('utf-8', errors='replace')
                 try:
                     return status, json.loads(response_text)
                 except json.JSONDecodeError:
                     return status, {"error": "Invalid JSON response", "raw": response_text}
-                    
+
         except urllib.error.HTTPError as exc:
             response_text = exc.read().decode('utf-8', errors='replace')
             try:
@@ -62,6 +66,8 @@ class HermesClient:
             return exc.code, err_data
         except urllib.error.URLError as exc:
             return 503, {"error": f"Connection failed: {str(exc.reason)}"}
+        except ssl.SSLError as exc:
+            return 525, {"error": f"SSL verification failed: {str(exc)}"}
         except TimeoutError:
             return 504, {"error": "Request timed out"}
         except Exception as exc:
