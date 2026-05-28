@@ -28,9 +28,10 @@ def test_safe_env_hides_missing_values():
     assert env["feedback_mode"] == "(default)"
     assert env["wake_phrases"] == "(default)"
     assert env["persist_session"] == "1"
-    assert env["endpoint"] == ""
-    assert env["auth_refresh_url"] == ""
-    assert env["auth_timeout"] == "10"
+    assert "endpoint" not in env
+    assert "auth_refresh_url" not in env
+    assert "auth_header" not in env
+    assert "auth_secret_header" not in env
 
 
 def test_semantic_state_matches_expected_priority():

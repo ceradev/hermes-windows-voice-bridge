@@ -95,6 +95,11 @@ class ConfigService:
     def save(self) -> None:
         with open(self.config_file, "w", encoding="utf-8") as f:
             json.dump(self._config, f, indent=2, ensure_ascii=False)
+        try:
+            import stat
+            os.chmod(self.config_file, stat.S_IRUSR | stat.S_IWUSR)
+        except Exception:
+            pass
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._config.get(key, default)

@@ -162,11 +162,8 @@ def _safe_env(env: Dict[str, str]) -> Dict[str, str]:
         "overlay_enabled": env.get("HERMES_OVERLAY_ENABLED", "1") or "1",
         "notifications_enabled": env.get("HERMES_NOTIFICATIONS_ENABLED", "1") or "1",
         "tts_enabled": env.get("HERMES_TTS_ENABLED", "1") or "1",
-        "endpoint": env.get("HERMES_WEBHOOK_URL", "") or "",
-        "auth_refresh_url": env.get("HERMES_AUTH_REFRESH_URL", "") or "",
-        "auth_timeout": env.get("HERMES_AUTH_TIMEOUT", "10") or "10",
-        "auth_header": env.get("HERMES_AUTH_HEADER", "Authorization") or "Authorization",
-        "auth_secret_header": env.get("HERMES_AUTH_SECRET_HEADER", "X-Hermes-Auth-Secret") or "X-Hermes-Auth-Secret",
+        # Infrastructure endpoints and auth headers are intentionally excluded
+        # to avoid leaking internal URLs or secret header names.
     }
 
 
@@ -565,8 +562,8 @@ class PanelApiHandler(BaseHTTPRequestHandler):
                 candidate = candidate.resolve()
                 dist_root = DIST_DIR.resolve()
                 if candidate != dist_root and dist_root not in candidate.parents:
-                    raise ValueError("outside dist")
-            except Exception:
+                    candidate = DIST_DIR / "index.html"
+            except (OSError, ValueError):
                 candidate = DIST_DIR / "index.html"
             if candidate.is_dir():
                 candidate = candidate / "index.html"
