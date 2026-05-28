@@ -52,3 +52,19 @@ state/logs/
 
 # Legacy web panel (node_modules are huge, keep source only)
 panel-web/node_modules/
+
+# React UI app node_modules
+src/ui/app/node_modules/
+
+# Tool / IDE metadata
+.antigravitycli/
+.claude/
+.codegraph/
+.cursor/
+
+# Test files
+test_*.py
+*.mp3
+
+# Runtime tokens
+state/.panel_token
