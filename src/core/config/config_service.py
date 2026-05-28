@@ -8,7 +8,7 @@ class ConfigService:
 
     DEFAULT_CONFIG = {
         "api_base_url": "http://91.98.36.55:8642",
-        "api_token": "cp_Fxinhp5UUWAFD2AHRjw7EB5gzpVGktBty2i6P8a4aPoUapGrD2fGTVxs9SuA3",
+        "api_token": "",
         "app_language": "es",
         "app_platform": "windows",
         "app_version": "1.0.0",
@@ -64,11 +64,12 @@ class ConfigService:
             self._config["api_base_url"] = "http://91.98.36.55:8642"
             self.save()
             
-        # Automatically inject API key if empty
-        if not self._config.get("api_token"):
-            self._config["api_token"] = "cp_Fxinhp5UUWAFD2AHRjw7EB5gzpVGktBty2i6P8a4aPoUapGrD2fGTVxs9SuA3"
+        # Load API token from environment if not already configured
+        env_token = os.environ.get("HERMES_API_TOKEN", "").strip()
+        if env_token and not self._config.get("api_token"):
+            self._config["api_token"] = env_token
             self.save()
-            
+
         # Clean up old webhook_url if present
         if "webhook_url" in self._config:
             del self._config["webhook_url"]
