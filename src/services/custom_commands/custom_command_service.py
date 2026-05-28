@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import subprocess
 import urllib.parse
@@ -145,7 +146,13 @@ class CustomCommandService:
         target = action.get("target", "")
 
         if action_type == "open_app":
-            subprocess.Popen(f"start {target}", shell=True)
+            if not target or any(c in target for c in {';', '&', '|', '>', '<', '^', '`', '"', "'", '\n', '\r'}):
+                logger.warning("Rejected unsafe open_app target: %s", target)
+                return
+            try:
+                os.startfile(target)
+            except Exception as exc:
+                logger.error("Failed to open app %s: %s", target, exc)
         elif action_type == "web_search":
             url = f"https://www.google.com/search?q={urllib.parse.quote(target)}"
             webbrowser.open(url)
@@ -163,8 +170,8 @@ class CustomCommandService:
         key = keys.get(action.lower().strip())
         if not key:
             return
-        cmd = f"powershell -WindowStyle Hidden -Command \"(new-object -com wscript.shell).SendKeys([char]{key})\""
-        subprocess.Popen(cmd, shell=True)
+        cmd = f"(new-object -com wscript.shell).SendKeys([char]{key})"
+        subprocess.Popen(["powershell", "-WindowStyle", "Hidden", "-Command", cmd], shell=False)
 
     def _speak(self, text: str) -> None:
         if not text:
@@ -186,8 +193,8 @@ class CustomCommandService:
         if not send_keys:
             return
         escaped = send_keys.replace("'", "''")
-        cmd = f"powershell -WindowStyle Hidden -Command \"(new-object -com wscript.shell).SendKeys('{escaped}')\""
-        subprocess.Popen(cmd, shell=True)
+        cmd = f"(new-object -com wscript.shell).SendKeys('{escaped}')"
+        subprocess.Popen(["powershell", "-WindowStyle", "Hidden", "-Command", cmd], shell=False)
 
     def _to_send_keys(self, hotkey: str) -> str:
         parts = [part.strip().lower() for part in hotkey.split("+") if part.strip()]
@@ -213,7 +220,13 @@ class CustomCommandService:
             "backspace": "{BACKSPACE}",
             "delete": "{DELETE}",
         }
-        key_value = special_keys.get(key, key)
+        if key in special_keys:
+            key_value = special_keys[key]
+        elif len(key) == 1 and key.isalnum():
+            key_value = key
+        else:
+            logger.warning("Disallowed hotkey key: %s", key)
+            return ""
         return f"{modifiers}{key_value}"
 
     def _normalize_text(self, text: str) -> str:

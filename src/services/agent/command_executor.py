@@ -113,8 +113,8 @@ class CommandExecutor:
                 # Media keys mapping for SendKeys
                 keys = {"up": "175", "down": "174", "mute": "173"}
                 if action in keys:
-                    cmd = f"powershell -WindowStyle Hidden -Command \"(new-object -com wscript.shell).SendKeys([char]{keys[action]})\""
-                    _ = subprocess.Popen(cmd, shell=True)
+                    cmd = f"(new-object -com wscript.shell).SendKeys([char]{keys[action]})"
+                    _ = subprocess.Popen(["powershell", "-WindowStyle", "Hidden", "-Command", cmd], shell=False)
                     return f"Volumen del sistema modificado: {action}"
                 return "Acción de volumen desconocida."
                 

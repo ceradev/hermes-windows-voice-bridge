@@ -1,8 +1,8 @@
 import ctypes
+import os
 import re
 import time
 import webbrowser
-import subprocess
 from importlib import import_module
 
 # Windows Virtual Key Codes for media control
@@ -97,11 +97,14 @@ def process_local_command(text: str) -> bool:
         }
         
         target = app_map.get(app_name, app_name.replace(" ", ""))
+        # Reject targets with shell metacharacters to prevent injection
+        if not target or any(c in target for c in {';', '&', '|', '>', '<', '^', '`', '"', "'", '\n', '\r'}):
+            return False
         try:
             if target == "chrome":
                 webbrowser.open("https://google.com")
             else:
-                subprocess.Popen(f"start {target}", shell=True)
+                os.startfile(target)
             return True
         except Exception:
             pass # Fallback to False
