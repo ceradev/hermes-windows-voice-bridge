@@ -4,6 +4,12 @@ type ConfigUpdates = Record<string, unknown>;
 type CustomCommandPayload = Omit<CustomCommandModel, 'id'>;
 type SessionRecord = { id: string; is_active?: boolean; [key: string]: unknown };
 
+export type ShortcutsConfig = {
+  hotkey: string;
+  mute_hotkey: string;
+  pause_hotkey: string;
+};
+
 type PywebviewApi = {
     get_config?: () => Promise<ConfigUpdates>;
     update_config?: (updates: ConfigUpdates) => Promise<boolean>;
@@ -131,5 +137,16 @@ export const api = {
     testCustomCommand: async (id: string) => {
         if (window.pywebview?.api?.test_custom_command) return await window.pywebview.api.test_custom_command(id);
         return false;
-    }
+    },
+    getShortcuts: async (): Promise<ShortcutsConfig> => {
+        const cfg = await api.getConfig();
+        return {
+            hotkey: (cfg.hotkey as string) || "CTRL+SHIFT+H",
+            mute_hotkey: (cfg.mute_hotkey as string) || "",
+            pause_hotkey: (cfg.pause_hotkey as string) || "",
+        };
+    },
+    updateShortcuts: async (shortcuts: ShortcutsConfig) => {
+        return await api.updateConfig(shortcuts);
+    },
 };
