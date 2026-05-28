@@ -11,9 +11,13 @@ class VoiceLoop:
         self.shortcut_manager = shortcut_manager
         self.tts = tts
         self.overlay = overlay
+        self.tray = None
         self._running = False
         self.is_paused = False
         self._thread = None
+
+    def set_tray(self, tray):
+        self.tray = tray
         
     def start(self):
         if self._running:
@@ -153,6 +157,8 @@ class VoiceLoop:
                 
         print(f"\n[MIC] 🟢 Empezando a escuchar (Origen: {source})...")
         self.overlay.show("listening")
+        if self.tray:
+            self.tray.set_mic_active(True)
         
         # Play elegant earcon instead of harsh TTS beep
         self.audio.play_earcon("wake")
@@ -184,6 +190,8 @@ class VoiceLoop:
             if text:
                 print(f"[STT] ✅ Texto reconocido: '{text}'")
                 self.overlay.hide()
+                if self.tray:
+                    self.tray.set_mic_active(False)
                 
                 # Check for local commands first
                 from src.platform.windows.local_commands import process_local_command
@@ -191,23 +199,31 @@ class VoiceLoop:
                     print(f"[LOCAL] 🖥️ Comando local ejecutado.")
                     self.audio.play_earcon("done")
                     self.bridge.log_local_action(text, "Acción de sistema ejecutada localmente.")
+                    if self.tray:
+                        self.tray.set_mic_active(False)
                     return True
                 
                 # Send message via bridge to ensure UI reacts and DB updates
                 res = self.bridge.send_message(text, image_base64=image_base64)
-                
+
                 if res.get("success", False):
                     self.audio.play_earcon("done")
                 else:
                     self.audio.play_earcon("error")
-                    
+
                 print(f"[API] 📡 Respuesta de Hermes: {res.get('success', False)}")
+                if self.tray:
+                    self.tray.set_mic_active(False)
                 return res.get("success", False)
             else:
                 print("[STT] ❌ El audio contenía ruido pero no se reconoció ningún texto claro.")
                 self.overlay.hide()
+                if self.tray:
+                    self.tray.set_mic_active(False)
                 return False
         else:
             print("[MIC] 💤 Silencio detectado. Cancelando escucha y volviendo a dormir.")
             self.overlay.hide()
+            if self.tray:
+                self.tray.set_mic_active(False)
             return False

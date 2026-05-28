@@ -96,7 +96,7 @@ def main():
         autostart.disable()
         
     # Init API Bridge
-    bridge = WebviewBridge(config, session_manager, hermes, audio, wakeword, tts, autostart)
+    bridge = WebviewBridge(config, session_manager, hermes, audio, wakeword, tts, autostart, shortcut_manager=shortcut_manager)
     
     # Init Overlay
     overlay = OverlayService()
@@ -173,15 +173,34 @@ def main():
         on_quit=lambda: on_quit(None, None)
     )
         
+    def on_quick_command(command_id: str):
+        try:
+            bridge.run_quick_command(command_id)
+            tray.notify("Command Executed", f"Ran quick command: {command_id}")
+        except Exception as e:
+            print(f"Quick command error: {e}")
+
     tray = TrayManager(
         app_name="Hermes Voice Bridge",
         on_open_app=on_open_app,
         on_pause_toggle=on_pause_toggle,
         on_restart=on_restart,
-        on_quit=on_quit
+        on_quit=on_quit,
+        on_quick_command=on_quick_command,
+        on_open_settings=on_open_app
     )
     tray.start()
-    
+    bridge.set_tray(tray)
+    voice_loop.set_tray(tray)
+
+    # Set initial tray info
+    tray.set_shortcut_display(config.get("hotkey", "CTRL+SHIFT+H"))
+    try:
+        cmds = bridge.get_quick_commands()
+        tray.update_quick_commands(cmds)
+    except Exception:
+        pass
+
     # Background connection polling loop
     def poll_health():
         import time
