@@ -7,6 +7,7 @@ import { Header } from './components/Layout/Header';
 import { Home } from './pages/Home';
 import { Sessions } from './pages/Sessions';
 import { History } from './pages/History';
+import { Notifications } from './pages/Notifications';
 import { Settings } from './pages/Settings';
 import { Voice, Hermes } from './pages/Voice';
 import { Shortcuts, TTS } from './pages/Shortcuts';
@@ -61,6 +62,7 @@ const AppContent = () => {
                   <Route path="/" element={<Home />} />
                   <Route path="/sessions" element={<Sessions />} />
                   <Route path="/history" element={<History />} />
+                  <Route path="/notifications" element={<Notifications />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/voice" element={<Voice />} />
                   <Route path="/hermes" element={<Hermes />} />

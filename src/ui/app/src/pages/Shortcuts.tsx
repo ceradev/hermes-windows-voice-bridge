@@ -3,6 +3,7 @@ import { api, type ShortcutsConfig } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { HotkeyRecorder } from '../components/HotkeyRecorder';
+import { SectionHeader } from '../components/Layout/PageHeader';
 import {
   Mic,
   VolumeX,
@@ -148,17 +149,11 @@ export const Shortcuts = () => {
       <div className="space-y-6 flex-1 pb-24">
         {/* Input Mapping Panel */}
         <div className="glass-panel rounded-[var(--radius-panel)] p-6 lg:p-8 transition-colors duration-300">
-          <div className="mb-6">
-            <p className="font-mono text-[11px] tracking-[0.24em] uppercase text-gray-500 dark:text-gray-400">
-              Input Mapping
-            </p>
-            <h3 className="font-bold text-gray-900 dark:text-white text-lg mt-1">
-              Keyboard Shortcuts
-            </h3>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-2">
-              Configure global hotkey combinations for voice control actions.
-            </p>
-          </div>
+          <SectionHeader
+            eyebrow="Input Mapping"
+            title="Keyboard Shortcuts"
+            description="Configure global hotkey combinations for voice control actions."
+          />
 
           {conflicts.length > 0 && (
             <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-control)] border border-red-500/30 bg-red-500/10 px-4 py-3">

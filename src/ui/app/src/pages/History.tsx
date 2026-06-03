@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { api } from '../services/api';
+import { SectionHeader } from '../components/Layout/PageHeader';
+import { useLanguage } from '../contexts/LanguageContext';
 import type { RecentActivity } from '../types';
 
 const formatTimestamp = (timestamp: string) => {
@@ -17,6 +19,7 @@ const formatTimestamp = (timestamp: string) => {
 
 export const History = () => {
   const [activity, setActivity] = useState<RecentActivity[]>([]);
+  const { t } = useLanguage();
 
   const loadActivity = async () => {
     const recentActivity = await api.getRecentActivity();
@@ -36,16 +39,16 @@ export const History = () => {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 flex h-full flex-col duration-500">
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <p className="mb-2 font-mono text-[11px] font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">Flight Recorder</p>
-          <h2 className="text-3xl font-extrabold uppercase tracking-tighter text-gray-900 dark:text-white">Activity Ledger</h2>
-          <p className="mt-1 text-sm font-semibold text-gray-500">Recent voice transcriptions and executed actions from this app session.</p>
-        </div>
-        <div className="rounded-[var(--radius-control)] border border-black/10 bg-black/5 px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.16em] text-gray-600 dark:border-white/10 dark:bg-white/10 dark:text-gray-300">
-          Last {activity.length} events
-        </div>
-      </div>
+      <SectionHeader
+        eyebrow={t('history.eyebrow')}
+        title={t('history.title')}
+        description={t('history.description')}
+        action={
+          <div className="rounded-[var(--radius-control)] border border-black/10 bg-black/5 px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.16em] text-gray-600 dark:border-white/10 dark:bg-white/10 dark:text-gray-300">
+            {t('history.event_count', { count: activity.length })}
+          </div>
+        }
+      />
 
       <div className="glass-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-panel)] transition-all duration-300">
         <div className="grid shrink-0 grid-cols-[140px_56px_88px_1fr] border-b border-black/10 bg-black/5 px-5 py-3 font-mono text-[10px] font-extrabold uppercase tracking-[0.2em] text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-gray-400">
