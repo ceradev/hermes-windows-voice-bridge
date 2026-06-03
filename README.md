@@ -463,7 +463,7 @@ Elimina:
 python -m pytest tests/ -v
 ```
 
-**Resultado actual:** 46 tests passing.
+**Resultado actual:** 78 tests passing.
 
 ### Estructura de tests
 
@@ -508,6 +508,7 @@ src/hermes_voice_bridge/
 
 ```
 hermes-windows-voice-bridge/
+<<<<<<< HEAD
 ├── docs/
 │   └── plans/
 │       └── 2026-05-24-native-refactor-plan.md   # Plan de refactorización
@@ -515,6 +516,11 @@ hermes-windows-voice-bridge/
 │   ├── index.html
 │   ├── package.json
 │   └── src/
+=======
+├── CHANGELOG.md                        # Version history and project state
+├── docs/                               # (deprecated — see CHANGELOG.md)
+│   └── plans/                          # (empty — legacy plan docs removed)
+>>>>>>> a6d2ecd (chore: update .gitignore, add CHANGELOG.md, fix README)
 ├── scripts/
 │   ├── build_installer.ps1                      # Build Inno Setup installer
 │   ├── install_autostart.ps1                    # Configurar autostart Windows
@@ -602,7 +608,7 @@ python .\src\windows_hermes_voice.py
 - [x] Sesión persistente con refresh backend
 - [x] API local HTTP
 - [x] Overlay de estado visual
-- [x] Tests automatizados (46 passing)
+- [x] Tests automatizados (78 passing)
 - [x] ZIP portable + Inno Setup installer
 - [x] Autostart con Windows
 - [ ] Wake word engine dedicado (Porcupine/OpenWakeWord)

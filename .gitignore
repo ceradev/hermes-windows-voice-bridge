@@ -20,6 +20,20 @@ wheels/
 .installed.cfg
 *.egg
 
+# Bytecode from deleted source files (legacy cleanup)
+# Orphan .pyc files that remain after .py sources were removed — safe to ignore everywhere
+src/core/config/__pycache__/config_service.cpython*.pyc
+src/core/session/__pycache__/session_manager.cpython*.pyc
+src/platform/windows/overlay/__pycache__/legacy.cpython*.pyc
+src/platform/windows/__pycache__/active_window.cpython*.pyc
+src/platform/windows/__pycache__/desktop_vision.cpython*.pyc
+src/platform/windows/__pycache__/local_commands.cpython*.pyc
+src/platform/windows/__pycache__/overlay_service.cpython*.pyc
+src/storage/__pycache__/database.cpython*.pyc
+tests/__pycache__/test_windows_overlay_service.cpython*.pyc
+__pycache__/test_mcp.cpython*.pyc
+__pycache__/test_vps.cpython*.pyc
+
 # Virtual environments
 venv/
 ENV/
@@ -46,9 +60,15 @@ state/voice.control.json
 state/logs/
 
 # Build artifacts
+build/HermesVoiceBridge/
+dist/HermesVoiceBridge/
 *.zip
 *.tar.gz
 *.exe
+HermesVoiceBridge.spec
+
+# Test/cache artifacts
+.pytest_cache/
 
 # Legacy web panel (node_modules are huge, keep source only)
 panel-web/node_modules/
