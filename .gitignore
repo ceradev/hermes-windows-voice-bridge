@@ -20,19 +20,13 @@ wheels/
 .installed.cfg
 *.egg
 
-# Bytecode from deleted source files (legacy cleanup)
-# Orphan .pyc files that remain after .py sources were removed — safe to ignore everywhere
-src/core/config/__pycache__/config_service.cpython*.pyc
-src/core/session/__pycache__/session_manager.cpython*.pyc
-src/platform/windows/overlay/__pycache__/legacy.cpython*.pyc
-src/platform/windows/__pycache__/active_window.cpython*.pyc
-src/platform/windows/__pycache__/desktop_vision.cpython*.pyc
-src/platform/windows/__pycache__/local_commands.cpython*.pyc
-src/platform/windows/__pycache__/overlay_service.cpython*.pyc
-src/storage/__pycache__/database.cpython*.pyc
-tests/__pycache__/test_windows_overlay_service.cpython*.pyc
-__pycache__/test_mcp.cpython*.pyc
-__pycache__/test_vps.cpython*.pyc
+# Bytecode from deleted source files (legacy cleanup orphans)
+src/core/config/__pycache__/
+src/core/session/__pycache__/
+src/platform/windows/__pycache__/
+src/platform/windows/overlay/__pycache__/
+src/storage/__pycache__/
+tests/__pycache__/
 
 # Virtual environments
 venv/
@@ -50,28 +44,34 @@ env/
 .DS_Store
 Thumbs.db
 
-# State / Secrets (NEVER commit these)
+# State / Secrets (NEVER commit)
 state/voice.env
+state/.panel_token
+state/logs/
+state/runtime_signal.json
+state/runtime_state.json
+state/runtime_state.json.lock
 state/session.json
 state/session.secrets
-state/runtime_state.json
-state/runtime_signal.json
 state/voice.control.json
-state/logs/
 
 # Build artifacts
-build/HermesVoiceBridge/
-dist/HermesVoiceBridge/
+HermesVoiceBridge.spec
+setup.iss
+build/
+dist/
+HermesVoiceBridge/
 *.zip
 *.tar.gz
 *.exe
-HermesVoiceBridge.spec
 
-# Test/cache artifacts
+# Test artifacts
 .pytest_cache/
+tests/__pycache__/
 
 # Legacy web panel (node_modules are huge, keep source only)
 panel-web/node_modules/
+panel-web/dist/
 
 # React UI app node_modules
 src/ui/app/node_modules/
@@ -82,9 +82,8 @@ src/ui/app/node_modules/
 .codegraph/
 .cursor/
 
-# Test files
-test_*.py
-*.mp3
-
 # Runtime tokens
 state/.panel_token
+
+# Legacy plan docs
+docs/plans/2026-05-24-native-refactor-plan.md
