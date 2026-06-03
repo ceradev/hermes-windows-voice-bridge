@@ -1,11 +1,14 @@
+import logging
 import os
 import sys
+import threading
+import time
 import webview
 from pathlib import Path
-import threading
 
-# Add src to python path for imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+# Add repo root to python path for imports
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
 from src.core.config.config_service import ConfigService
 from src.core.session.session_manager import SessionManager
@@ -21,8 +24,51 @@ from src.platform.windows.voice_loop import VoiceLoop
 from src.platform.windows.overlay_service import OverlayService
 from src.platform.windows.autostart_service import AutostartService
 
+UI_DIST_DIR = REPO_ROOT / "src" / "ui" / "app" / "dist"
+UI_SRC_DIR = REPO_ROOT / "src" / "ui" / "app" / "src"
+
+
+def _newest_source_mtime() -> float:
+    if not UI_SRC_DIR.is_dir():
+        return 0.0
+    newest = 0.0
+    for path in UI_SRC_DIR.rglob("*"):
+        if path.suffix in {".tsx", ".ts", ".css"} and path.is_file():
+            newest = max(newest, path.stat().st_mtime)
+    return newest
+
+
+def resolve_ui_url() -> str:
+    index_html = UI_DIST_DIR / "index.html"
+
+    if os.environ.get("HERMES_UI_DEV") == "1":
+        url = "http://127.0.0.1:5173"
+        print(f"[Hermes UI] Dev mode: {url}")
+        print("[Hermes UI] Start Vite with: cd src\\ui\\app && npm run dev")
+        return url
+
+    if not index_html.is_file():
+        print(f"[Hermes UI] Missing build: {index_html}")
+        print("[Hermes UI] Run: cd src\\ui\\app && npm install && npm run build")
+        print("[Hermes UI] Or: .\\scripts\\run_desktop_app.ps1")
+        print("[Hermes UI] Dev fallback: set HERMES_UI_DEV=1 and npm run dev")
+        sys.exit(1)
+
+    dist_mtime = index_html.stat().st_mtime
+    src_mtime = _newest_source_mtime()
+    if src_mtime > dist_mtime + 1:
+        print("[Hermes UI] WARNING: src/ui/app/src is newer than dist.")
+        print("[Hermes UI] Rebuild with: cd src\\ui\\app && npm run build")
+
+    print(f"[Hermes UI] Loading: {index_html.resolve()}")
+    print(
+        "[Hermes UI] dist built:",
+        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(dist_mtime)),
+    )
+    return str(index_html.resolve())
+
+
 def main():
-    # Paths
     appdata = os.environ.get("APPDATA")
     if not appdata:
         appdata = str(Path.home() / "AppData" / "Roaming")
@@ -32,101 +78,98 @@ def main():
 
     db_path = app_dir / "database.sqlite"
     log_path = app_dir / "app.log"
-    dist_path = Path(__file__).resolve().parent.parent.parent.parent / "src" / "ui" / "app" / "dist"
-    
-    # Configure logging
-    import logging
+
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         handlers=[
-            logging.FileHandler(log_path, encoding='utf-8'),
-            logging.StreamHandler(sys.stdout)
-        ]
+            logging.FileHandler(log_path, encoding="utf-8"),
+            logging.StreamHandler(sys.stdout),
+        ],
     )
-    
-    # Redirect prints to logger and mirror to original console
+
     original_stdout = sys.stdout
     original_stderr = sys.stderr
-    
+
     class PrintLogger:
         def write(self, message):
             original_stdout.write(message)
             original_stdout.flush()
             if message.strip():
                 logging.getLogger("stdout").info(message.strip())
+
         def flush(self):
             original_stdout.flush()
-    
+
     class ErrorLogger:
         def write(self, message):
             original_stderr.write(message)
             original_stderr.flush()
             if message.strip():
                 logging.getLogger("stderr").error(message.strip())
+
         def flush(self):
             original_stderr.flush()
-        
+
     sys.stdout = PrintLogger()
     sys.stderr = ErrorLogger()
-    
-    # Init Core & Storage
+
     config = ConfigService()
     db = Database(db_path)
     session_manager = SessionManager(db)
-    
-    # Init Services
+
     hermes = HermesClient(config)
     audio = AudioService()
-    wakeword = WakePhraseManager(
-        model_size=config.get("stt_model", "base")
-    )
+    wakeword = WakePhraseManager(model_size=config.get("stt_model", "base"))
     tts = TTSService(
         mode=config.get("feedback_mode", "both"),
         voice_name=config.get("feedback_voice", ""),
-        rate=config.get("tts_rate", 235)
+        rate=config.get("tts_rate", 235),
     )
     shortcut_manager = ShortcutManager()
-    
-    # Init Autostart
+
     autostart = AutostartService()
     if config.get("autostart", True):
         autostart.enable()
     else:
         autostart.disable()
-        
-    # Init API Bridge
-    bridge = WebviewBridge(config, session_manager, hermes, audio, wakeword, tts, autostart, shortcut_manager=shortcut_manager)
-    
-    # Init Overlay
+
+    bridge = WebviewBridge(
+        config,
+        session_manager,
+        hermes,
+        audio,
+        wakeword,
+        tts,
+        autostart,
+        shortcut_manager=shortcut_manager,
+    )
+
     overlay = OverlayService()
     overlay.start()
-    
-    # Init Voice Loop
+
     voice_loop = VoiceLoop(config, audio, wakeword, bridge, shortcut_manager, tts, overlay)
     voice_loop.start()
-    
-    # Init Proactive Loop
+
     from src.services.agent.proactive_service import ProactiveService
+
     proactive = ProactiveService(bridge)
     proactive.start()
-    
-    # Fallback to dev server if dist not built yet
-    url = str(dist_path / "index.html") if dist_path.exists() else "http://localhost:5173"
-    
-    # Create Window
+
+    url = resolve_ui_url()
+
     window = webview.create_window(
-        'Hermes Voice Bridge', 
-        url=url, 
+        "Hermes Voice Bridge",
+        url=url,
         js_api=bridge,
         width=1320,
         height=900,
         min_size=(350, 150),
-        background_color='#000000' if config.get("theme", "dark") == "dark" else '#FFFFFF'
+        background_color="#000000" if config.get("theme", "dark") == "dark" else "#FFFFFF",
     )
-    
+
     bridge.set_window(window)
-    
+
     def on_quit(icon=None, item=None):
         proactive.stop()
         voice_loop.stop()
@@ -134,18 +177,19 @@ def main():
         tray.stop()
         try:
             window.destroy()
-        except: pass
+        except Exception:
+            pass
         os._exit(0)
 
     def on_closing():
         window.hide()
         return False
-        
+
     window.events.closing += on_closing
-    
+
     def on_open_app(icon, item):
         window.show()
-        
+
     def on_pause_toggle(paused: bool):
         voice_loop.is_paused = paused
         if paused:
@@ -157,22 +201,24 @@ def main():
 
     def on_restart(icon, item):
         import subprocess
+
         proactive.stop()
         voice_loop.stop()
         shortcut_manager.stop()
         tray.stop()
         try:
             window.destroy()
-        except: pass
+        except Exception:
+            pass
         subprocess.Popen([sys.executable] + sys.argv)
         os._exit(0)
-        
+
     bridge.set_callbacks(
         on_pause=on_pause_toggle,
         on_restart=lambda: on_restart(None, None),
-        on_quit=lambda: on_quit(None, None)
+        on_quit=lambda: on_quit(None, None),
     )
-        
+
     def on_quick_command(command_id: str):
         try:
             bridge.run_quick_command(command_id)
@@ -187,13 +233,12 @@ def main():
         on_restart=on_restart,
         on_quit=on_quit,
         on_quick_command=on_quick_command,
-        on_open_settings=on_open_app
+        on_open_settings=on_open_app,
     )
     tray.start()
     bridge.set_tray(tray)
     voice_loop.set_tray(tray)
 
-    # Set initial tray info
     tray.set_shortcut_display(config.get("hotkey", "CTRL+SHIFT+H"))
     try:
         cmds = bridge.get_quick_commands()
@@ -201,9 +246,7 @@ def main():
     except Exception:
         pass
 
-    # Background connection polling loop
     def poll_health():
-        import time
         while True:
             try:
                 is_connected = hermes.health()
@@ -211,11 +254,11 @@ def main():
                 is_connected = False
             tray.set_status(is_connected)
             time.sleep(10)
-            
+
     threading.Thread(target=poll_health, daemon=True).start()
-    
-    # Start app
+
     webview.start(debug=False)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { MessageSquare, Plus, Trash2, Copy, Clock, Globe, Volume2, Download } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { SectionHeader } from '../components/Layout/PageHeader';
 
 export const Sessions = () => {
   const [sessions, setSessions] = useState<any[]>([]);
@@ -82,28 +83,37 @@ export const Sessions = () => {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
-      <div className="mb-6 flex justify-between items-end">
-        <div>
-           {activeSession?.remote_session_id && (
-             <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 dark:border-gray-700">
-               <Globe size={12} />
-               <span>{t('sessions.remote_id')} {activeSession.remote_session_id}</span>
-               <button 
-                 onClick={() => {
-                   navigator.clipboard.writeText(activeSession.remote_session_id);
-                   toast(t('sessions.copied'), "success");
-                 }}
-                 className="hover:text-black dark:hover:text-white transition-colors ml-1"
-               >
-                 <Copy size={12} />
-               </button>
-             </div>
-           )}
+      <SectionHeader
+        eyebrow={t('sessions.eyebrow')}
+        title={t('sessions.title')}
+        description={t('sessions.description')}
+        action={
+          <button
+            type="button"
+            onClick={() => void handleCreateSession()}
+            className="flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-black/10 bg-black/5 px-5 py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] text-gray-900 shadow-lg backdrop-blur-md transition-colors hover:bg-black/10 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+          >
+            <Plus size={16} /> {t('sessions.new_session')}
+          </button>
+        }
+      />
+
+      {activeSession?.remote_session_id ? (
+        <div className="mb-6 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+          <Globe size={12} />
+          <span>{t('sessions.remote_id')} {activeSession.remote_session_id}</span>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(activeSession.remote_session_id);
+              toast(t('sessions.copied'), 'success');
+            }}
+            className="ml-1 transition-colors hover:text-black dark:hover:text-white"
+          >
+            <Copy size={12} />
+          </button>
         </div>
-        <button onClick={handleCreateSession} className="flex items-center gap-2 bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 text-gray-900 dark:text-white border border-black/10 dark:border-white/20 px-5 py-2.5 rounded-full font-bold transition-all shadow-lg text-sm backdrop-blur-md">
-          <Plus size={16} /> {t('sessions.new_session')}
-        </button>
-      </div>
+      ) : null}
       
       <div className="flex gap-6 flex-1 min-h-[500px]">
         <div className="w-1/3 glass-panel rounded-[1.5rem] overflow-hidden flex flex-col transition-all duration-300">

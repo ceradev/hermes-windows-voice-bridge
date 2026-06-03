@@ -14,6 +14,7 @@ const translations = {
     'nav.general': 'Overview',
     'nav.sessions': 'Sessions',
     'nav.history': 'History',
+    'nav.notifications': 'Notifications',
     'nav.voice': 'Voice',
     'nav.shortcuts': 'Shortcuts',
     'nav.commands': 'Commands',
@@ -47,6 +48,9 @@ const translations = {
     'home.you': 'You',
 
     // Sessions
+    'sessions.eyebrow': 'Conversation Workspace',
+    'sessions.title': 'Sessions',
+    'sessions.description': 'Switch chats, review message history, and export active conversations.',
     'sessions.remote_id': 'Remote ID:',
     'sessions.copied': 'ID copied to clipboard',
     'sessions.new_session': 'New Session',
@@ -55,6 +59,28 @@ const translations = {
     'sessions.type_message': 'Type a message manually...',
     'sessions.error_sending': 'Error sending message',
     'sessions.latency': '{ms}ms latency',
+
+    // History
+    'history.eyebrow': 'Flight Recorder',
+    'history.title': 'Activity Ledger',
+    'history.description': 'Recent voice transcriptions and executed actions from this app session.',
+    'history.event_count': 'Last {count} events',
+
+    // Notifications
+    'notifications.eyebrow': 'Alert Surface',
+    'notifications.title': 'Notifications',
+    'notifications.description': 'Control overlay feedback and native desktop notices for voice turns and errors.',
+    'notifications.overlay_eyebrow': 'Visual Feedback',
+    'notifications.overlay_title': 'Overlay Feedback',
+    'notifications.overlay_desc': 'Show a small non-invasive overlay during listening, transcribing, and responding.',
+    'notifications.overlay_toggle': 'Show overlay feedback',
+    'notifications.desktop_eyebrow': 'System Alerts',
+    'notifications.desktop_title': 'Desktop Notifications',
+    'notifications.desktop_desc': 'Native notices for errors, reconnects, and completed voice turns.',
+    'notifications.desktop_toggle': 'Desktop notifications',
+    'notifications.save': 'Save Changes',
+    'notifications.success': 'Notification settings saved',
+    'notifications.error': 'Failed to save notification settings',
 
     // Settings
     'settings.autostart': 'Autostart',
@@ -156,6 +182,7 @@ const translations = {
     'nav.general': 'Resumen',
     'nav.sessions': 'Sesiones',
     'nav.history': 'Historial',
+    'nav.notifications': 'Notificaciones',
     'nav.voice': 'Voz',
     'nav.shortcuts': 'Atajos',
     'nav.commands': 'Comandos',
@@ -188,6 +215,9 @@ const translations = {
     'home.you': 'Tú',
 
     // Sessions
+    'sessions.eyebrow': 'Espacio de Conversación',
+    'sessions.title': 'Sesiones',
+    'sessions.description': 'Cambia de chat, revisa el historial de mensajes y exporta conversaciones activas.',
     'sessions.remote_id': 'ID Remoto:',
     'sessions.copied': 'ID copiado al portapapeles',
     'sessions.new_session': 'Nueva Sesión',
@@ -196,6 +226,28 @@ const translations = {
     'sessions.type_message': 'Escribe un mensaje manualmente...',
     'sessions.error_sending': 'Error al enviar el mensaje',
     'sessions.latency': '{ms}ms de latencia',
+
+    // History
+    'history.eyebrow': 'Registro de Vuelo',
+    'history.title': 'Historial de Actividad',
+    'history.description': 'Transcripciones recientes y acciones ejecutadas en esta sesión de la app.',
+    'history.event_count': 'Últimos {count} eventos',
+
+    // Notifications
+    'notifications.eyebrow': 'Superficie de Alertas',
+    'notifications.title': 'Notificaciones',
+    'notifications.description': 'Controla el overlay visual y los avisos nativos de escritorio para turnos de voz y errores.',
+    'notifications.overlay_eyebrow': 'Feedback Visual',
+    'notifications.overlay_title': 'Overlay de Feedback',
+    'notifications.overlay_desc': 'Muestra un overlay pequeño y no invasivo durante escucha, transcripción y respuesta.',
+    'notifications.overlay_toggle': 'Mostrar overlay de feedback',
+    'notifications.desktop_eyebrow': 'Alertas del Sistema',
+    'notifications.desktop_title': 'Notificaciones de Escritorio',
+    'notifications.desktop_desc': 'Avisos nativos para errores, reconexiones y turnos de voz completados.',
+    'notifications.desktop_toggle': 'Notificaciones de escritorio',
+    'notifications.save': 'Guardar Cambios',
+    'notifications.success': 'Ajustes de notificaciones guardados',
+    'notifications.error': 'Error al guardar ajustes de notificaciones',
 
     // Settings
     'settings.autostart': 'Inicio Automático',

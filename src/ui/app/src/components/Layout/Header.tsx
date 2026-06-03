@@ -14,6 +14,7 @@ export const Header = () => {
       case '/': return t('nav.general');
       case '/sessions': return t('nav.sessions');
       case '/history': return t('nav.history');
+      case '/notifications': return t('nav.notifications');
       case '/voice': return t('nav.voice');
       case '/shortcuts': return t('nav.shortcuts');
       case '/commands': return t('nav.commands');
@@ -50,10 +51,10 @@ export const Header = () => {
 
         <div className="w-px h-6 bg-gray-200 dark:bg-gray-800 mx-1"></div>
 
-        <button className="relative p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors focus:outline-none rounded-full hover:bg-gray-100 dark:hover:bg-white/5">
+        <Link to="/notifications" className="relative p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors focus:outline-none rounded-full hover:bg-gray-100 dark:hover:bg-white/5">
           <Bell className="w-5 h-5" />
           <span className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full border border-white dark:border-[#0a0a0a]"></span>
-        </button>
+        </Link>
         <Link to="/settings" className="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors focus:outline-none rounded-full hover:bg-gray-100 dark:hover:bg-white/5">
           <Settings className="w-5 h-5" />
         </Link>

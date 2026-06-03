@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Mic, Settings, LayoutDashboard, MessageSquare, Key, History, Activity, Volume2, ChevronLeft, ChevronRight, LogOut, Terminal } from 'lucide-react';
+import { Mic, Settings, LayoutDashboard, MessageSquare, Key, History, Activity, Volume2, ChevronLeft, ChevronRight, LogOut, Terminal, Bell } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { api } from '../../services/api';
 
@@ -17,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggleCollapse })
     { name: t('nav.general'), path: '/', icon: LayoutDashboard },
     { name: t('nav.sessions'), path: '/sessions', icon: MessageSquare },
     { name: t('nav.history'), path: '/history', icon: History },
+    { name: t('nav.notifications'), path: '/notifications', icon: Bell },
     { name: t('nav.voice'), path: '/voice', icon: Mic },
     { name: t('nav.shortcuts'), path: '/shortcuts', icon: Key },
     { name: t('nav.commands'), path: '/commands', icon: Terminal },
