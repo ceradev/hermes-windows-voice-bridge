@@ -1,4 +1,5 @@
 import threading
+import threading
 import time
 import numpy as np
 
@@ -235,6 +236,8 @@ class VoiceLoop:
 
             if text:
                 print(f"[STT] ✅ Texto reconocido: '{text}'")
+                if hasattr(self.bridge, "set_runtime_overlay_text"):
+                    self.bridge.set_runtime_overlay_text(text, "")
                 if self.tray:
                     self.tray.set_mic_active(False)
 
@@ -244,6 +247,9 @@ class VoiceLoop:
                     print(f"[LOCAL] 🖥️ Comando local ejecutado.")
                     self.audio.play_earcon("done")
                     self.bridge.log_local_action(text, "Acción de sistema ejecutada localmente.")
+                    if hasattr(self.bridge, "set_runtime_overlay_text"):
+                        self.bridge.set_runtime_overlay_text(text, "Acción de sistema ejecutada localmente.")
+                    self.overlay.show_result(text, "Acción de sistema ejecutada localmente.")
                     self.overlay.hide()
                     if hasattr(self.bridge, "set_runtime_listening_state"):
                         self.bridge.set_runtime_listening_state("idle")
@@ -252,10 +258,15 @@ class VoiceLoop:
                     return True
 
                 # Send message via bridge to ensure UI reacts and DB updates
+                self.overlay.show("thinking", text)
+                if hasattr(self.bridge, "set_runtime_listening_state"):
+                    self.bridge.set_runtime_listening_state("thinking", text)
                 res = self.bridge.send_message(text, image_base64=image_base64)
 
                 response_text = res.get("response", "")
                 if response_text:
+                    if hasattr(self.bridge, "set_runtime_overlay_text"):
+                        self.bridge.set_runtime_overlay_text(text, response_text)
                     self.overlay.show_result(text, response_text)
                     if hasattr(self.bridge, "set_runtime_listening_state"):
                         self.bridge.set_runtime_listening_state("speaking", response_text)
