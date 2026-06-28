@@ -127,6 +127,23 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(title, messageOrType, type);
   }, [addToast]);
 
+  useEffect(() => {
+    const handleHermesToast = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<ToastItem>>).detail ?? {};
+      const title = typeof detail.title === 'string' && detail.title.trim()
+        ? detail.title
+        : 'Hermes notification';
+      const message = typeof detail.message === 'string' ? detail.message : undefined;
+      const type = detail.type === 'success' || detail.type === 'error' || detail.type === 'info' || detail.type === 'warning'
+        ? detail.type
+        : 'info';
+      addToast(title, message, type);
+    };
+
+    window.addEventListener('hermes_toast', handleHermesToast);
+    return () => window.removeEventListener('hermes_toast', handleHermesToast);
+  }, [addToast]);
+
   const unreadCount = toasts.filter(t => !t.read).length;
 
   return (

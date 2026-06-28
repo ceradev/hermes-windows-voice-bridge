@@ -2,7 +2,7 @@ import threading
 import ctypes
 import ctypes.wintypes
 import time
-from typing import Optional, Tuple, Dict, Set, List
+from typing import Callable, Optional, Tuple, Dict, Set, List
 
 # ── Windows Message Constants ────────────────────────────────────────────────
 WM_HOTKEY = 0x0312
@@ -229,10 +229,24 @@ class ShortcutManager:
         self._name_to_id: Dict[str, int] = {}
         self._triggered: Set[str] = set()
         self._errors: Dict[str, str] = {}
+        self._registration_error_handler: Optional[Callable[[str, str, str], None]] = None
 
         # Legacy attribute compatibility
         self.trigger = threading.Event()
         self.visual_trigger = threading.Event()
+
+    def set_registration_error_handler(
+        self,
+        handler: Optional[Callable[[str, str, str], None]],
+    ) -> None:
+        """Install a callback for async RegisterHotKey failures.
+
+        The callback receives ``(name, hotkey_combo, error_message)`` and is
+        invoked from the shortcut worker thread immediately after registration
+        attempts complete.
+        """
+        with self._lock:
+            self._registration_error_handler = handler
 
     # ── Public API: named hotkeys ────────────────────────────────────────────
 
@@ -340,6 +354,16 @@ class ShortcutManager:
         """Return a map of hotkey-name → error-message for the last start()."""
         with self._lock:
             return dict(self._errors)
+
+    def _emit_registration_error(self, name: str, hotkey: str, message: str) -> None:
+        with self._lock:
+            handler = self._registration_error_handler
+        if handler is None:
+            return
+        try:
+            handler(name, hotkey, message)
+        except Exception as exc:
+            print(f"Shortcut registration error handler failed: {exc}")
 
     # ── Conflict detection ───────────────────────────────────────────────────
 
@@ -508,11 +532,14 @@ class ShortcutManager:
         user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)
 
         # Register all configured hotkeys
+        registration_errors: List[Tuple[str, str, str]] = []
         with self._lock:
             for name, hotkey_str in self._hotkeys.items():
                 parsed = self.parse_hotkey(hotkey_str)
                 if not parsed:
-                    self._errors[name] = f"Invalid hotkey syntax: {hotkey_str!r}"
+                    message = f"Invalid hotkey syntax: {hotkey_str!r}"
+                    self._errors[name] = message
+                    registration_errors.append((name, hotkey_str, message))
                     continue
 
                 mod, vk = parsed
@@ -524,7 +551,12 @@ class ShortcutManager:
                     self._name_to_id[name] = hotkey_id
                 else:
                     err = kernel32.GetLastError()
-                    self._errors[name] = f"RegisterHotKey failed (Win32 error {err})"
+                    message = f"RegisterHotKey failed for {hotkey_str!r} (Win32 error {err})"
+                    self._errors[name] = message
+                    registration_errors.append((name, hotkey_str, message))
+
+        for name, hotkey_str, message in registration_errors:
+            self._emit_registration_error(name, hotkey_str, message)
 
         try:
             while self._running:

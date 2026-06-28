@@ -2,6 +2,7 @@ from collections import deque
 from collections import deque
 from datetime import datetime, timezone
 from importlib import import_module
+import json
 from typing import Any
 from src.core.state import AppStateStore
 
@@ -27,11 +28,14 @@ class WebviewBridge:
         self._on_restart = None
         self._on_quit = None
         self._recent_activity: deque[ActivityEntry] = deque(maxlen=50)
+        self._pending_toasts: deque[dict[str, str]] = deque(maxlen=20)
         self._app_state = app_state or AppStateStore()
+        self._install_shortcut_error_handler()
         self._sync_runtime_from_config()
 
     def set_window(self, window):
         self._window = window
+        self._flush_pending_toasts()
 
     def set_overlay(self, overlay):
         self._overlay = overlay
@@ -57,6 +61,56 @@ class WebviewBridge:
 
     def set_voice_loop(self, voice_loop):
         self._voice_loop = voice_loop
+
+    def _install_shortcut_error_handler(self) -> None:
+        if not self._shortcut_manager:
+            return
+        if not hasattr(self._shortcut_manager, "set_registration_error_handler"):
+            return
+        try:
+            self._shortcut_manager.set_registration_error_handler(
+                self._handle_shortcut_registration_error
+            )
+        except Exception:
+            pass
+
+    def _handle_shortcut_registration_error(self, name: str, hotkey: str, message: str) -> None:
+        combo = str(hotkey or "").strip() or str(name or "hotkey")
+        detail = f"{combo}: {message}"
+        self.show_error("Hotkey registration failed", detail)
+
+    def show_error(self, title: str, message: str = "") -> bool:
+        """Show an error toast in the web UI and persist the latest error."""
+        title_text = str(title or "Error")
+        message_text = str(message or "")
+        self._app_state.update(last_error=message_text or title_text)
+
+        if not self._window:
+            self._pending_toasts.append({
+                "type": "error",
+                "title": title_text,
+                "message": message_text,
+            })
+            return False
+
+        payload = json.dumps(
+            {"type": "error", "title": title_text, "message": message_text},
+            ensure_ascii=False,
+        )
+        self._safe_evaluate_js(
+            f"window.dispatchEvent(new CustomEvent('hermes_toast', {{detail: {payload}}}))"
+        )
+        return True
+
+    def _flush_pending_toasts(self) -> None:
+        if not self._window:
+            return
+        while self._pending_toasts:
+            toast = self._pending_toasts.popleft()
+            payload = json.dumps(toast, ensure_ascii=False)
+            self._safe_evaluate_js(
+                f"window.dispatchEvent(new CustomEvent('hermes_toast', {{detail: {payload}}}))"
+            )
 
     def get_runtime_state(self) -> dict[str, Any]:
         return self._app_state.snapshot()

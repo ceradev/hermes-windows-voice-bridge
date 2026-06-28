@@ -156,6 +156,10 @@ class FakeShortcutManager:
     def __init__(self) -> None:
         self.stop_calls = 0
         self.start_calls: list[tuple[str, Optional[str]]] = []
+        self.error_handler = None
+
+    def set_registration_error_handler(self, handler: Any) -> None:
+        self.error_handler = handler
 
     def stop(self) -> None:
         self.stop_calls += 1
@@ -275,6 +279,22 @@ def test_update_config_restarts_shortcuts_and_updates_tray_hotkey() -> None:
     assert tray.shortcut_display == "ctrl+alt+h"
     assert shortcuts.stop_calls == 1
     assert shortcuts.start_calls == [("ctrl+alt+h", "ctrl+shift+v")]
+
+
+def test_shortcut_registration_error_dispatches_error_toast() -> None:
+    _bridge, _config, _tray, _voice_loop, window, shortcuts = build_bridge()
+
+    assert shortcuts.error_handler is not None
+    shortcuts.error_handler(
+        "trigger",
+        "CTRL+ALT+H",
+        "RegisterHotKey failed for 'CTRL+ALT+H' (Win32 error 1409)",
+    )
+
+    assert len(window.scripts) == 1
+    assert "hermes_toast" in window.scripts[0]
+    assert "Hotkey registration failed" in window.scripts[0]
+    assert "CTRL+ALT+H" in window.scripts[0]
 
 
 def test_record_activity_syncs_recent_items_to_tray() -> None:
