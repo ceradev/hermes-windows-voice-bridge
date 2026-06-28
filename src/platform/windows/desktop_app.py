@@ -2,6 +2,8 @@ import logging
 # pyright: reportImportCycles=false
 import logging
 import os
+import signal
+import subprocess
 import sys
 import threading
 import time
@@ -73,6 +75,7 @@ def resolve_ui_url() -> str:
 
 
 def main():
+    logger = logging.getLogger(__name__)
     appdata = os.environ.get("APPDATA")
     if not appdata:
         appdata = str(Path.home() / "AppData" / "Roaming")
@@ -164,6 +167,71 @@ def main():
         app_state=app_state,
     )
     window: Any = None
+    shutdown_event = threading.Event()
+    shutdown_complete = threading.Event()
+    shutdown_lock = threading.Lock()
+    shutdown_started = False
+    shutdown_timeout = 2.0
+    health_thread: threading.Thread | None = None
+    voice_loop: VoiceLoop | None = None
+
+    def _remaining_shutdown_time(deadline: float, minimum: float = 0.1) -> float:
+        return max(minimum, deadline - time.monotonic())
+
+    def _start_shutdown_fallback(reason: str) -> None:
+        def _fallback() -> None:
+            if not shutdown_complete.wait(shutdown_timeout):
+                logger.critical(
+                    "Graceful shutdown timed out after %.1f seconds for %s; forcing process exit",
+                    shutdown_timeout,
+                    reason,
+                )
+                os._exit(0)
+
+        threading.Thread(target=_fallback, name="HermesShutdownFallback", daemon=True).start()
+
+    def _safe_shutdown_step(name: str, action) -> None:
+        try:
+            action()
+        except Exception:
+            logger.exception("Error while stopping %s", name)
+
+    def request_shutdown(reason: str = "quit", restart: bool = False, destroy_window: bool = True) -> None:
+        nonlocal shutdown_started
+        with shutdown_lock:
+            if shutdown_started:
+                return
+            shutdown_started = True
+
+        shutdown_event.set()
+        _start_shutdown_fallback(reason)
+        deadline = time.monotonic() + shutdown_timeout
+        logger.info("Starting graceful shutdown: reason=%s restart=%s", reason, restart)
+        app_state.patch_service("bridge", state="stopping", detail=reason)
+
+        _safe_shutdown_step(
+            "health poller",
+            lambda: health_thread.join(timeout=_remaining_shutdown_time(deadline))
+            if health_thread and health_thread is not threading.current_thread() and health_thread.is_alive()
+            else None,
+        )
+        _safe_shutdown_step("proactive service", lambda: proactive.stop(timeout=_remaining_shutdown_time(deadline)))
+        _safe_shutdown_step("voice loop", lambda: voice_loop.stop(timeout=_remaining_shutdown_time(deadline)) if voice_loop else None)
+        _safe_shutdown_step("shortcut manager", shortcut_manager.stop)
+        _safe_shutdown_step("audio service", audio.shutdown)
+        _safe_shutdown_step("TTS service", lambda: tts.shutdown(timeout=_remaining_shutdown_time(deadline)))
+        _safe_shutdown_step("overlay service", lambda: overlay.stop(timeout=_remaining_shutdown_time(deadline)))
+        _safe_shutdown_step("tray manager", tray.stop)
+
+        if destroy_window and window is not None:
+            _safe_shutdown_step("webview window", window.destroy)
+
+        if restart:
+            _safe_shutdown_step("restart process", lambda: subprocess.Popen([sys.executable] + sys.argv))
+
+        app_state.patch_service("bridge", state="stopped", detail=reason)
+        shutdown_complete.set()
+        logger.info("Graceful shutdown completed: reason=%s", reason)
 
     def on_overlay_position_change(x: int, y: int) -> None:
         config.update({"overlay_x": x, "overlay_y": y})
@@ -177,10 +245,12 @@ def main():
         bridge.set_runtime_overlay_mode(mode)
 
     def on_overlay_dashboard_click() -> None:
-        window.show()
+        if window is not None and not shutdown_event.is_set():
+            window.show()
         
     def on_overlay_mic_click() -> None:
-        shortcut_manager._triggered.add("trigger")
+        if not shutdown_event.is_set() and voice_loop is not None:
+            voice_loop.request_listening("overlay")
 
     overlay = OverlayService(
         initial_mode=str(config.get("overlay_mode", "mini") or "mini").lower(),
@@ -220,24 +290,23 @@ def main():
     bridge.set_window(window)
 
     def on_quit(icon=None, item=None):
-        proactive.stop()
-        voice_loop.stop()
-        shortcut_manager.stop()
-        tray.stop()
-        try:
-            window.destroy()
-        except Exception:
-            pass
-        os._exit(0)
+        request_shutdown("tray_quit")
 
     def on_closing():
-        window.hide()
+        if shutdown_event.is_set():
+            return True
+        threading.Thread(
+            target=lambda: request_shutdown("window_close"),
+            name="HermesWindowCloseShutdown",
+            daemon=True,
+        ).start()
         return False
 
     window.events.closing += on_closing
 
     def on_open_app(icon, item):
-        window.show()
+        if not shutdown_event.is_set():
+            window.show()
 
     def on_pause_toggle(paused: bool):
         voice_loop.is_paused = paused
@@ -267,18 +336,7 @@ def main():
             tray.notify("Microphone Error", "Could not update microphone selection")
 
     def on_restart(icon, item):
-        import subprocess
-
-        proactive.stop()
-        voice_loop.stop()
-        shortcut_manager.stop()
-        tray.stop()
-        try:
-            window.destroy()
-        except Exception:
-            pass
-        subprocess.Popen([sys.executable] + sys.argv)
-        os._exit(0)
+        request_shutdown("restart", restart=True)
 
     bridge.set_callbacks(
         on_pause=on_pause_toggle,
@@ -293,6 +351,10 @@ def main():
         except Exception as e:
             print(f"Quick command error: {e}")
 
+    def on_tray_listen() -> None:
+        if not shutdown_event.is_set() and voice_loop is not None:
+            voice_loop.request_listening("tray")
+
     tray = TrayManager(
         app_name="Hermes Voice Bridge",
         on_open_app=on_open_app,
@@ -302,6 +364,7 @@ def main():
         on_quick_command=on_quick_command,
         on_open_settings=on_open_app,
         on_change_microphone=on_change_microphone,
+        on_start_listening=on_tray_listen,
     )
     tray.start()
     bridge.set_tray(tray)
@@ -311,21 +374,38 @@ def main():
     try:
         cmds = bridge.get_quick_commands()
         tray.update_quick_commands(cmds)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Could not load quick commands for tray: %s", exc)
+
+    def _handle_termination_signal(signum, frame) -> None:
+        threading.Thread(
+            target=lambda: request_shutdown(f"signal_{signum}"),
+            name="HermesSignalShutdown",
+            daemon=True,
+        ).start()
+
+    signal.signal(signal.SIGTERM, _handle_termination_signal)
+    if hasattr(signal, "SIGINT"):
+        signal.signal(signal.SIGINT, _handle_termination_signal)
 
     def poll_health():
-        while True:
+        while not shutdown_event.is_set():
             try:
                 is_connected = bridge.check_health()
             except Exception:
                 is_connected = False
-            tray.set_status(is_connected)
-            time.sleep(10)
+            if not shutdown_event.is_set():
+                tray.set_status(is_connected)
+            shutdown_event.wait(10)
 
-    threading.Thread(target=poll_health, daemon=True).start()
+    health_thread = threading.Thread(target=poll_health, name="HermesHealthPoller", daemon=True)
+    health_thread.start()
 
     webview.start(debug=False)
+    if not shutdown_event.is_set():
+        request_shutdown("webview_stopped", destroy_window=False)
+    elif not shutdown_complete.is_set():
+        shutdown_complete.wait(shutdown_timeout)
 
 
 if __name__ == "__main__":

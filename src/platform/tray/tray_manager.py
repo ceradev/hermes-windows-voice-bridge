@@ -21,6 +21,7 @@ class TrayManager:
         on_quick_command: Optional[Callable[[str], None]] = None,
         on_open_settings: Optional[Callable[..., None]] = None,
         on_change_microphone: Optional[Callable[[int | None], None]] = None,
+        on_start_listening: Optional[Callable[[], None]] = None,
     ) -> None:
         self.app_name = app_name
         self.on_open_app = on_open_app
@@ -30,6 +31,7 @@ class TrayManager:
         self.on_quick_command = on_quick_command
         self.on_open_settings = on_open_settings or on_open_app
         self.on_change_microphone = on_change_microphone
+        self.on_start_listening = on_start_listening
 
         self.icon: Any | None = None
         self._lock = threading.Lock()
@@ -105,6 +107,10 @@ class TrayManager:
     def _handle_quit(self, icon: Any = None, item: Any = None) -> None:
         self.on_quit(icon, item)
 
+    def _handle_listen(self, icon: Any = None, item: Any = None) -> None:
+        if self.on_start_listening:
+            self.on_start_listening()
+
     def _on_quick_cmd(self, command_id: str) -> Callable[..., None]:
         def handler(icon: Any = None, item: Any = None) -> None:
             if self.on_quick_command:
@@ -173,6 +179,7 @@ class TrayManager:
             Item(f"Microphone: {mic_text}{mic_live}", self._noop, enabled=False),
             pystray.Menu.SEPARATOR,
             Item("Open Dashboard", self._handle_open, default=True),
+            Item("Cancel Listening" if self.is_mic_active else "Listen", self._handle_listen),
             Item("Microphone", pystray.Menu(*self._build_microphone_items())),
             Item("Quick Commands", pystray.Menu(*self._build_quick_command_items())),
             Item("Recent Activity", pystray.Menu(*self._build_recent_activity_items())),
