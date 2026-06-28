@@ -1,133 +1,192 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
-import { Save } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { Save, Activity, Layout, Bell, Key, Globe, Monitor } from 'lucide-react';
+import { SectionHeader } from '../components/Layout/PageHeader';
+import { useHermes } from '../contexts/HermesContext';
 
 export const Settings = () => {
   const [config, setConfig] = useState<any>({});
-  const [initialConfig, setInitialConfig] = useState<any>({});
   const [isDirty, setIsDirty] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const { success, error } = useToast();
-  const { t } = useLanguage();
+  const { overlayEnabled, overlayMode, updateOverlayConfig, refreshRuntime } = useHermes();
 
   useEffect(() => {
-    api.getConfig().then(data => {
-      setConfig(data);
-      setInitialConfig(data);
-    });
+    api.getConfig().then(setConfig);
   }, []);
 
   const handleChange = (key: string, value: any) => {
-    setConfig((prev: any) => ({ ...prev, [key]: value }));
+    setConfig({ ...config, [key]: value });
     setIsDirty(true);
   };
 
   const handleSave = async () => {
     try {
       await api.updateConfig(config);
-      setInitialConfig(config);
       setIsDirty(false);
-      success(t('settings.success'));
+      success('Settings saved successfully');
     } catch (e) {
-      error(t('settings.error'));
+      error('Failed to save settings');
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    if (isDirty) {
+      await api.updateConfig(config);
+      setIsDirty(false);
+    }
+    try {
+      const isHealthy = await api.checkHealth();
+      if (isHealthy) {
+        success('Connected to Hermes successfully!');
+      } else {
+        error('Failed to connect to Hermes');
+      }
+    } catch (e) {
+      error('Failed to connect to Hermes');
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleOverlayToggle = async (next: boolean) => {
+    try {
+      await updateOverlayConfig({ overlay_enabled: next });
+    } catch (e) {
+      error('Failed to update overlay');
+    }
+  };
+
+  const handleOverlayMode = async (mode: string) => {
+    try {
+      await updateOverlayConfig({ overlay_mode: mode });
+    } catch (e) {
+      error('Failed to update overlay mode');
     }
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full">
-      <div className="space-y-4 flex-1">
-        <div className="bg-white dark:bg-[#111] border border-gray-100 dark:border-gray-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none rounded-[1.5rem] p-6 flex items-center justify-between transition-colors duration-300">
-          <div>
-            <h3 className="font-bold text-gray-900 dark:text-white">{t('settings.autostart')}</h3>
-            <p className="text-sm font-medium text-gray-500 mt-1">{t('settings.autostart_desc')}</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" checked={config.autostart || false} onChange={(e) => handleChange("autostart", e.target.checked)} className="sr-only peer" />
-            <div className="w-14 h-7 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gray-900 dark:peer-checked:bg-white dark:peer-checked:after:bg-gray-900 shadow-inner"></div>
-          </label>
-        </div>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col pb-24">
+      <SectionHeader
+        eyebrow="SYSTEM"
+        title="Settings & Connection"
+        description="Configure app behavior, overlay, and API connection."
+      />
 
-        <div className="bg-white dark:bg-[#111] border border-gray-100 dark:border-gray-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none rounded-[1.5rem] p-6 flex items-center justify-between transition-colors duration-300">
-          <div>
-            <h3 className="font-bold text-gray-900 dark:text-white">{t('settings.minimize')}</h3>
-            <p className="text-sm font-medium text-gray-500 mt-1">{t('settings.minimize_desc')}</p>
+      <div className="flex-1 space-y-8 max-w-3xl">
+        
+        {/* API CONNECTION */}
+        <section>
+          <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] pb-2 mb-4 text-[var(--text-secondary)]">
+            <Globe size={16} />
+            <h2 className="eyebrow">Backend Connection</h2>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" checked={config.minimize_to_tray || false} onChange={(e) => handleChange("minimize_to_tray", e.target.checked)} className="sr-only peer" />
-            <div className="w-14 h-7 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gray-900 dark:peer-checked:bg-white dark:peer-checked:after:bg-gray-900 shadow-inner"></div>
-          </label>
-        </div>
-
-        <div className="bg-white dark:bg-[#111] border border-gray-100 dark:border-gray-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none rounded-[1.5rem] p-6 transition-colors duration-300">
-          <h3 className="font-bold text-gray-900 dark:text-white mb-4">Atajos de Teclado (Hotkeys)</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 block">Atajo de Voz</label>
-              <input 
-                type="text" 
-                value={config.hotkey || "ctrl+shift+space"} 
-                onChange={(e) => handleChange("hotkey", e.target.value)} 
-                className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white font-medium focus:outline-none focus:border-gray-900/50 dark:focus:border-white/50 transition-all shadow-inner"
-                placeholder="Ej. ctrl+shift+space"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-1 block">Atajo de Visión de Escritorio</label>
-              <input 
-                type="text" 
-                value={config.visual_hotkey || "ctrl+shift+v"} 
-                onChange={(e) => handleChange("visual_hotkey", e.target.value)} 
-                className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-gray-900 dark:text-white font-medium focus:outline-none focus:border-gray-900/50 dark:focus:border-white/50 transition-all shadow-inner"
-                placeholder="Ej. ctrl+shift+v"
-              />
-              <p className="text-xs text-gray-500 mt-2 font-medium">Pulsa este atajo para hablar con Hermes adjuntando una captura de pantalla.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-[#111] border border-gray-100 dark:border-gray-800 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none rounded-[1.5rem] p-6 transition-colors duration-300">
-          <h3 className="font-bold text-gray-900 dark:text-white mb-6">{t('settings.vad_title')}</h3>
           
-          <div className="space-y-6">
+          <div className="surface-quiet p-5 space-y-5">
             <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{t('settings.vad_wake')}</span>
-                <span className="text-xs font-bold text-gray-500">{config.wake_energy || 0.008}</span>
-              </div>
-              <input type="range" min="0.001" max="0.05" step="0.001" value={config.wake_energy || 0.008} onChange={(e) => handleChange("wake_energy", parseFloat(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-gray-900 dark:accent-white" />
+              <label className="text-xs font-medium text-[var(--text-secondary)] block mb-2">Endpoint URL</label>
+              <input
+                type="text"
+                value={config.api_base_url || ''}
+                onChange={(e) => handleChange('api_base_url', e.target.value)}
+                className="field field-mono w-full text-sm"
+                placeholder="http://91.98.36.55:8642"
+              />
             </div>
-            
             <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{t('settings.vad_silence')}</span>
-                <span className="text-xs font-bold text-gray-500">{config.silence_rms || 0.008}</span>
-              </div>
-              <input type="range" min="0.001" max="0.05" step="0.001" value={config.silence_rms || 0.008} onChange={(e) => handleChange("silence_rms", parseFloat(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-gray-900 dark:accent-white" />
+              <label className="text-xs font-medium text-[var(--text-secondary)] block mb-2">Webhook Secret</label>
+              <input
+                type="password"
+                value={config.api_token || ''}
+                onChange={(e) => handleChange('api_token', e.target.value)}
+                className="field field-mono w-full text-sm"
+                placeholder="sk-..."
+              />
             </div>
-            
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{t('settings.vad_timeout')}</span>
-                <span className="text-xs font-bold text-gray-500">{config.silence_timeout_seconds || 2.5}s</span>
-              </div>
-              <input type="range" min="0.5" max="5.0" step="0.1" value={config.silence_timeout_seconds || 2.5} onChange={(e) => handleChange("silence_timeout_seconds", parseFloat(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-gray-900 dark:accent-white" />
+            <div className="pt-2">
+              <button onClick={handleTestConnection} disabled={isTesting} className="btn-base bg-[var(--surface-2)]">
+                <Activity size={14} className={isTesting ? 'animate-pulse text-[var(--accent)]' : ''} />
+                {isTesting ? 'Testing...' : 'Test Connection'}
+              </button>
             </div>
           </div>
-        </div>
+        </section>
+
+        {/* OVERLAY */}
+        <section>
+          <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] pb-2 mb-4 text-[var(--text-secondary)]">
+            <Layout size={16} />
+            <h2 className="eyebrow">Dynamic Overlay</h2>
+          </div>
+          
+          <div className="surface-quiet space-y-0 divide-y divide-[var(--border-subtle)] overflow-hidden">
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">Enable Dynamic Pill</p>
+                <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Shows status in an always-on-top pill</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" checked={overlayEnabled} onChange={(e) => handleOverlayToggle(e.target.checked)} className="sr-only peer" />
+                <div className="w-11 h-6 bg-[var(--surface-3)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
+              </label>
+            </div>
+            
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">Overlay Mode</p>
+                <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Choose the detail level</p>
+              </div>
+              <select
+                value={overlayMode}
+                onChange={(e) => handleOverlayMode(e.target.value)}
+                className="field field-mono w-48 text-sm"
+              >
+                <option value="mini">Minimalist</option>
+                <option value="full">Detailed</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* APP BEHAVIOR */}
+        <section>
+          <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] pb-2 mb-4 text-[var(--text-secondary)]">
+            <Monitor size={16} />
+            <h2 className="eyebrow">App Behavior</h2>
+          </div>
+          
+          <div className="surface-quiet space-y-0 divide-y divide-[var(--border-subtle)] overflow-hidden">
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">Start with Windows</p>
+                <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Launch Hermes automatically</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" checked={config.autostart || false} onChange={(e) => handleChange("autostart", e.target.checked)} className="sr-only peer" />
+                <div className="w-11 h-6 bg-[var(--surface-3)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
+              </label>
+            </div>
+            
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">Minimize to Tray</p>
+                <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Hide in the system tray instead of taskbar</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" checked={config.minimize_to_tray || false} onChange={(e) => handleChange("minimize_to_tray", e.target.checked)} className="sr-only peer" />
+                <div className="w-11 h-6 bg-[var(--surface-3)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
+              </label>
+            </div>
+          </div>
+        </section>
+
       </div>
 
-      <div className="mt-8 flex justify-end">
-        <button 
-          onClick={handleSave}
-          disabled={!isDirty}
-          className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-sm transition-all duration-200 ${
-            isDirty 
-              ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25 shadow-lg scale-100' 
-              : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed scale-95'
-          }`}
-        >
-          <Save size={18} /> {t('settings.save')}
+      <div className="fixed bottom-8 right-8 z-40 transition-all duration-300 ease-out" style={{ transform: isDirty ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)', opacity: isDirty ? 1 : 0, pointerEvents: isDirty ? 'auto' : 'none' }}>
+        <button onClick={handleSave} className="flex items-center gap-2 rounded-full bg-[var(--text-primary)] px-6 py-3 text-[13px] font-bold text-[var(--surface-0)] shadow-[var(--shadow-card-hover)] transition-all hover:bg-[var(--text-secondary)] hover:scale-105 active:scale-95">
+          <Save size={16} /> Save Changes
         </button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
-import { Bell, Settings, Moon, Sun, Globe } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Moon, Sun, Globe } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -8,57 +8,75 @@ export const Header = () => {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { language, toggleLanguage, t } = useLanguage();
-  
+
   const getPageTitle = (path: string) => {
     switch (path) {
-      case '/': return t('nav.general');
-      case '/sessions': return t('nav.sessions');
-      case '/history': return t('nav.history');
-      case '/notifications': return t('nav.notifications');
-      case '/voice': return t('nav.voice');
-      case '/shortcuts': return t('nav.shortcuts');
-      case '/commands': return t('nav.commands');
-      case '/hermes': return t('nav.hermes');
-      case '/tts': return t('nav.tts');
-      case '/settings': return t('nav.settings');
-      default: return 'Hermes';
+      case '/':
+        return t('nav.general');
+      case '/chat':
+        return t('nav.sessions');
+      case '/configure':
+        return t('nav.shortcuts');
+      case '/commands':
+        return t('nav.commands');
+      case '/settings':
+        return t('nav.settings');
+      default:
+        return 'Hermes';
+    }
+  };
+
+  const getPageEyebrow = (path: string) => {
+    switch (path) {
+      case '/':
+        return 'Overview';
+      case '/chat':
+        return 'Workspace';
+      case '/configure':
+        return 'Input';
+      case '/commands':
+        return 'Automation';
+      case '/settings':
+        return 'System';
+      default:
+        return 'Page';
     }
   };
 
   return (
-    <header className="h-16 border-b border-gray-200/50 dark:border-white/10 bg-transparent flex items-center justify-between px-8 select-none z-40 transition-colors duration-300">
-      <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
-        {getPageTitle(location.pathname)}
-      </h2>
-      
-      <div className="flex items-center gap-3">
-        <button 
+    <header className="surface-titlebar flex h-[60px] shrink-0 select-none items-center justify-between px-6 md:px-8 relative z-40" style={{ borderImage: 'linear-gradient(to right, transparent, var(--border-subtle) 20%, var(--border-subtle) 80%, transparent) 1' }}>
+      <div className="flex min-w-0 items-baseline gap-3">
+        <p className="eyebrow eyebrow-accent text-[9px]">
+          {getPageEyebrow(location.pathname)}
+        </p>
+        <h2 className="truncate font-display text-[16px] font-bold tracking-[-0.01em] text-[var(--text-primary)]">
+          {getPageTitle(location.pathname)}
+        </h2>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <button
           onClick={toggleLanguage}
-          className="flex items-center gap-1 p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors focus:outline-none rounded-full hover:bg-gray-100 dark:hover:bg-white/5 font-semibold text-xs uppercase"
+          className="flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-subtle)] hover:bg-[var(--surface-1)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)]"
           title={t('lang.toggle')}
+          aria-label={t('lang.toggle')}
         >
-          <Globe className="w-4 h-4" />
+          <Globe className="h-3.5 w-3.5" strokeWidth={1.8} />
           {language}
         </button>
 
-        <button 
+        <button
           onClick={toggleTheme}
-          className="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors focus:outline-none rounded-full hover:bg-gray-100 dark:hover:bg-white/5"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-subtle)] hover:bg-[var(--surface-1)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)]"
           title={t('theme.toggle')}
+          aria-label={t('theme.toggle')}
         >
-          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          {theme === 'dark' ? (
+            <Sun className="h-4 w-4" strokeWidth={1.8} />
+          ) : (
+            <Moon className="h-4 w-4" strokeWidth={1.8} />
+          )}
         </button>
-
-        <div className="w-px h-6 bg-gray-200 dark:bg-gray-800 mx-1"></div>
-
-        <Link to="/notifications" className="relative p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors focus:outline-none rounded-full hover:bg-gray-100 dark:hover:bg-white/5">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full border border-white dark:border-[#0a0a0a]"></span>
-        </Link>
-        <Link to="/settings" className="p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors focus:outline-none rounded-full hover:bg-gray-100 dark:hover:bg-white/5">
-          <Settings className="w-5 h-5" />
-        </Link>
-        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 ml-2 shadow-sm border border-gray-200 dark:border-gray-700"></div>
       </div>
     </header>
   );

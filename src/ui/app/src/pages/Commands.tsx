@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Play, X, Terminal, ListPlus } from 'lucide-react';
+import { SectionHeader } from '../components/Layout/PageHeader';
 import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -190,38 +191,27 @@ export const Commands = () => {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 flex h-full flex-col duration-500">
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="mb-2 font-mono text-[11px] font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">IF voice phrase THEN action chain</p>
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-black/10 bg-black/5 text-gray-900 dark:border-white/10 dark:bg-white/10 dark:text-white">
-              <Terminal className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-3xl font-extrabold uppercase tracking-tighter text-gray-900 dark:text-white">
-                {label('commands.title', 'Custom Commands')}
-              </h3>
-              <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">
-                {label('commands.description', 'Create local voice shortcuts that trigger apps, searches, hotkeys, volume changes, or speech.')}
-              </p>
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center justify-center gap-2 rounded-[var(--radius-control)] border border-black/10 bg-black/5 px-5 py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] text-gray-900 shadow-lg backdrop-blur-md transition-colors hover:bg-black/10 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
-        >
-          <Plus size={16} /> {label('commands.new', 'New Command')}
-        </button>
-      </div>
+      <SectionHeader
+        eyebrow="IF voice phrase THEN action chain"
+        title={label('commands.title', 'Custom Commands')}
+        description={label('commands.description', 'Create local voice shortcuts that trigger apps, searches, hotkeys, volume changes, or speech.')}
+        action={
+          <button
+            onClick={openCreateModal}
+            className="btn-base"
+          >
+            <Plus size={16} /> {label('commands.new', 'New Command')}
+          </button>
+        }
+      />
 
-      <div className="glass-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-panel)] transition-all duration-300">
-        <div className="flex shrink-0 items-center justify-between border-b border-black/10 p-5 dark:border-white/10">
+      <div className="surface-base flex min-h-0 flex-1 flex-col overflow-hidden transition-all duration-300">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--border-default)] p-5">
           <div>
-            <h4 className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:text-gray-400">
+            <h4 className="eyebrow">
               {label('commands.library', 'Command Library')}
             </h4>
-            <p className="mt-1 font-mono text-xs font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+            <p className="mt-1 font-mono text-[10px] uppercase text-[var(--text-tertiary)]">
               {commands.length} {label('commands.count_suffix', 'configured')}
             </p>
           </div>
@@ -229,18 +219,20 @@ export const Commands = () => {
 
         <div className="custom-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto p-4 pb-20">
           {isLoading ? (
-            <div className="flex h-64 items-center justify-center font-mono text-xs font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-              {label('commands.loading', 'Loading commands...')}
+            <div className="flex h-64 flex-col gap-4">
+              <div className="surface-inset h-[120px] w-full animate-pulse opacity-50" />
+              <div className="surface-inset h-[120px] w-full animate-pulse opacity-50" />
+              <div className="surface-inset h-[120px] w-full animate-pulse opacity-50" />
             </div>
           ) : commands.length === 0 ? (
             <div className="flex h-64 flex-col items-center justify-center px-6 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[var(--radius-control)] border border-black/10 bg-black/5 text-gray-500 dark:border-white/10 dark:bg-white/10 dark:text-gray-400">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center surface-raised text-[var(--text-muted)]">
                 <ListPlus className="h-6 w-6" />
               </div>
-              <h4 className="mb-1 font-bold text-gray-900 dark:text-white">
+              <h4 className="mb-1 text-heading">
                 {label('commands.empty_title', 'No commands yet')}
               </h4>
-              <p className="max-w-sm text-sm font-semibold text-gray-500 dark:text-gray-400">
+              <p className="max-w-sm text-body text-[var(--text-secondary)]">
                 {label('commands.empty_desc', 'Add a command to map trigger phrases to one or more desktop actions.')}
               </p>
             </div>
@@ -248,16 +240,16 @@ export const Commands = () => {
             commands.map((command) => (
               <div
                 key={command.id}
-                className="group grid grid-cols-1 gap-4 rounded-[var(--radius-panel)] border border-black/10 bg-black/5 p-4 transition-colors hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 lg:grid-cols-[220px_1fr_auto]"
+                className="group grid grid-cols-1 gap-4 surface-raised p-4 transition-colors hover:border-[var(--border-strong)] lg:grid-cols-[220px_1fr_auto]"
               >
-                <div className="min-w-0 border-b border-black/10 pb-4 dark:border-white/10 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
-                  <p className="mb-2 font-mono text-[10px] font-extrabold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">IF</p>
-                  <h4 className="mb-3 truncate text-base font-extrabold text-gray-900 dark:text-white">{command.name}</h4>
+                <div className="min-w-0 border-b border-[var(--border-subtle)] pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
+                  <p className="mb-2 eyebrow text-[var(--text-tertiary)]">IF</p>
+                  <h4 className="mb-3 truncate text-heading">{command.name}</h4>
                   <div className="flex flex-wrap gap-2">
                     {command.trigger_phrases.map((phrase, index) => (
                       <span
                         key={`${phrase}-${index}`}
-                        className="border border-black/10 bg-white/70 px-2.5 py-1.5 font-mono text-[11px] font-bold text-gray-800 shadow-inner dark:border-white/10 dark:bg-black/30 dark:text-gray-200"
+                        className="surface-inset px-2.5 py-1 text-body"
                       >
                         {phrase}
                       </span>
@@ -267,19 +259,19 @@ export const Commands = () => {
 
                 <div className="min-w-0">
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="font-mono text-[10px] font-extrabold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">THEN</p>
-                    <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                    <p className="eyebrow text-[var(--text-tertiary)]">THEN</p>
+                    <span className="font-mono text-[10px] text-[var(--text-muted)]">
                       {command.actions.length} {label('commands.actions', 'actions')}
                     </span>
                   </div>
-                  <div className="relative space-y-3 pl-9 before:absolute before:left-[13px] before:top-3 before:bottom-3 before:w-px before:bg-black/15 dark:before:bg-white/15">
+                  <div className="relative space-y-3 pl-9 before:absolute before:left-[13px] before:top-3 before:bottom-3 before:w-px before:bg-[var(--border-subtle)]">
                     {command.actions.map((action, index) => (
-                      <div key={`${action.type}-${index}`} className="relative rounded-[var(--radius-control)] border border-black/10 bg-white/60 px-3 py-2 shadow-inner dark:border-white/10 dark:bg-black/20">
-                        <span className="absolute -left-9 top-2 flex h-7 w-7 items-center justify-center border border-black/10 bg-white font-mono text-[10px] font-extrabold text-gray-700 dark:border-white/10 dark:bg-gray-950 dark:text-gray-200">
+                      <div key={`${action.type}-${index}`} className="relative surface-base px-3 py-2">
+                        <span className="absolute -left-9 top-2 flex h-7 w-7 items-center justify-center surface-base text-[10px] text-[var(--text-secondary)]">
                           {formatStep(index)}
                         </span>
-                        <p className="font-mono text-[10px] font-extrabold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">{action.type}</p>
-                        <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-200">{action.target}</p>
+                        <p className="eyebrow mb-1 text-[var(--text-tertiary)]">{action.type}</p>
+                        <p className="truncate text-body text-[var(--text-primary)]">{action.target}</p>
                       </div>
                     ))}
                   </div>
@@ -290,7 +282,7 @@ export const Commands = () => {
                     onClick={() => handleTest(command)}
                     disabled={testingId === command.id}
                     aria-label={label('commands.test', 'Test')}
-                    className="flex items-center gap-2 rounded-[var(--radius-control)] border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 font-mono text-xs font-bold uppercase tracking-[0.12em] text-emerald-700 transition-colors hover:bg-emerald-500/20 disabled:opacity-60 dark:text-emerald-300"
+                    className="btn-base bg-[var(--state-ready)]/10 border-[var(--state-ready)]/20 text-[var(--state-ready)] hover:bg-[var(--state-ready)]/20"
                   >
                     <Play size={14} className={testingId === command.id ? 'animate-pulse' : ''} />
                     {testingId === command.id ? label('commands.testing', 'Testing') : label('commands.test', 'Test')}
@@ -299,7 +291,7 @@ export const Commands = () => {
                     <button
                       onClick={() => openEditModal(command)}
                       aria-label={label('commands.edit', 'Edit')}
-                      className="rounded-[var(--radius-control)] border border-black/10 bg-black/5 p-2.5 text-gray-700 transition-colors hover:bg-black/10 dark:border-white/10 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20"
+                      className="btn-base px-2.5 py-2.5 text-[var(--text-secondary)]"
                       title={label('commands.edit', 'Edit')}
                     >
                       <Pencil size={16} />
@@ -307,7 +299,7 @@ export const Commands = () => {
                     <button
                       onClick={() => handleDelete(command)}
                       aria-label={label('commands.delete', 'Delete')}
-                      className="rounded-[var(--radius-control)] border border-red-500/20 bg-red-500/10 p-2.5 text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+                      className="btn-base px-2.5 py-2.5 bg-[var(--state-error)]/10 border-[var(--state-error)]/20 text-[var(--state-error)] hover:bg-[var(--state-error)]/20"
                       title={label('commands.delete', 'Delete')}
                     >
                       <Trash2 size={16} />
@@ -322,21 +314,21 @@ export const Commands = () => {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="glass-panel flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[var(--radius-panel)] shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="commands-dialog-title">
-            <div className="flex items-start justify-between gap-4 border-b border-black/10 p-6 dark:border-white/10">
+          <div className="surface-base flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden shadow-card" role="dialog" aria-modal="true" aria-labelledby="commands-dialog-title">
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--border-default)] p-6">
               <div>
-                <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">Command Chain Editor</p>
-                <h3 id="commands-dialog-title" className="text-2xl font-extrabold uppercase tracking-tighter text-gray-900 dark:text-white">
+                <p className="eyebrow-accent">Command Chain Editor</p>
+                <h3 id="commands-dialog-title" className="mt-1.5 text-display">
                   {editingCommand ? label('commands.edit_title', 'Edit Command') : label('commands.create_title', 'New Command')}
                 </h3>
-                <p className="mt-1 text-sm font-semibold text-gray-500 dark:text-gray-400">
+                <p className="mt-1.5 text-body text-[var(--text-secondary)]">
                   {label('commands.form_desc', 'Define the phrases Hermes should recognize and the actions to run.')}
                 </p>
               </div>
               <button
                 onClick={closeModal}
                 aria-label={label('commands.close', 'Close')}
-                className="rounded-[var(--radius-control)] p-2 text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-900 dark:hover:bg-white/10 dark:hover:text-white"
+                className="btn-ghost p-2"
                 title={label('commands.close', 'Close')}
               >
                 <X size={20} />
@@ -345,64 +337,64 @@ export const Commands = () => {
 
             <div className="custom-scrollbar overflow-y-auto p-6">
               <div className="mb-5">
-                <label className="mb-2 block font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-600 dark:text-gray-400">
+                <label className="eyebrow mb-2 block text-[var(--text-secondary)]">
                   {label('commands.name', 'Name')}
                 </label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="w-full rounded-[var(--radius-control)] border border-black/10 bg-black/5 p-4 text-sm font-semibold text-gray-900 transition-colors focus:border-gray-900 focus:outline-none dark:border-white/10 dark:bg-[#0a0a0a] dark:text-white dark:focus:border-white"
+                  className="field"
                   placeholder={label('commands.name_placeholder', 'Open my editor')}
                 />
               </div>
 
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-[0.85fr_1.15fr]">
-                <section className="rounded-[var(--radius-panel)] border border-black/10 bg-black/5 p-4 dark:border-white/10 dark:bg-white/5">
-                  <div className="mb-3 flex items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
-                    <label className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-600 dark:text-gray-400">
+                <section className="surface-raised p-4">
+                  <div className="mb-3 flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+                    <label className="eyebrow text-[var(--text-secondary)]">
                       IF trigger phrases
                     </label>
-                    <span className="font-mono text-[10px] font-bold text-gray-500">VOC</span>
+                    <span className="font-mono text-[10px] font-bold text-[var(--text-muted)]">VOC</span>
                   </div>
                   <input
                     type="text"
                     value={form.triggerPhrases}
                     onChange={(e) => setForm((prev) => ({ ...prev, triggerPhrases: e.target.value }))}
-                    className="w-full rounded-[var(--radius-control)] border border-black/10 bg-white/70 p-4 font-mono text-sm font-semibold text-gray-900 transition-colors focus:border-gray-900 focus:outline-none dark:border-white/10 dark:bg-[#0a0a0a] dark:text-white dark:focus:border-white"
+                    className="field"
                     placeholder={label('commands.triggers_placeholder', 'open code, start editor')}
                   />
-                  <p className="mt-3 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  <p className="mt-3 text-xs font-medium text-[var(--text-tertiary)]">
                     {label('commands.triggers_hint', 'Separate phrases with commas.')}
                   </p>
                 </section>
 
-                <section className="rounded-[var(--radius-panel)] border border-black/10 bg-black/5 p-4 dark:border-white/10 dark:bg-white/5">
-                  <div className="mb-3 flex items-center justify-between gap-4 border-b border-black/10 pb-3 dark:border-white/10">
-                    <label className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-gray-600 dark:text-gray-400">
+                <section className="surface-raised p-4">
+                  <div className="mb-3 flex items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-3">
+                    <label className="eyebrow text-[var(--text-secondary)]">
                       THEN action chain
                     </label>
                     <button
                       onClick={addAction}
-                      className="flex items-center gap-2 rounded-[var(--radius-control)] border border-black/10 bg-white/70 px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-gray-900 transition-colors hover:bg-white dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                      className="btn-base py-1 px-2.5 text-xs"
                     >
                       <Plus size={14} /> {label('commands.add_action', 'Add Action')}
                     </button>
                   </div>
 
-                  <div className="relative space-y-3 pl-9 before:absolute before:left-[13px] before:top-3 before:bottom-3 before:w-px before:bg-black/15 dark:before:bg-white/15">
+                  <div className="relative space-y-3 pl-9 before:absolute before:left-[13px] before:top-3 before:bottom-3 before:w-px before:bg-[var(--border-subtle)]">
                     {form.actions.map((action, index) => (
                       <div
                         key={index}
-                        className="relative grid grid-cols-1 gap-3 rounded-[var(--radius-control)] border border-black/10 bg-white/70 p-3 dark:border-white/10 dark:bg-black/20 md:grid-cols-[180px_1fr_auto]"
+                        className="relative grid grid-cols-1 gap-3 surface-inset p-3 md:grid-cols-[180px_1fr_auto]"
                       >
-                        <span className="absolute -left-9 top-3 flex h-7 w-7 items-center justify-center border border-black/10 bg-white font-mono text-[10px] font-extrabold text-gray-700 dark:border-white/10 dark:bg-gray-950 dark:text-gray-200">
+                        <span className="absolute -left-9 top-3 flex h-7 w-7 items-center justify-center surface-base text-[10px] text-[var(--text-secondary)]">
                           {formatStep(index)}
                         </span>
                         <select
                           value={action.type}
                           onChange={(e) => updateAction(index, { type: e.target.value })}
-                          className="w-full rounded-[var(--radius-control)] border border-black/10 bg-white p-3 font-mono text-xs font-bold text-gray-900 transition-colors focus:border-gray-900 focus:outline-none dark:border-white/10 dark:bg-[#0a0a0a] dark:text-white dark:focus:border-white"
+                          className="field"
                         >
                           {actionTypes.map((actionType) => (
                             <option key={actionType} value={actionType}>{actionType}</option>
@@ -412,14 +404,14 @@ export const Commands = () => {
                           type="text"
                           value={action.target}
                           onChange={(e) => updateAction(index, { target: e.target.value })}
-                          className="w-full rounded-[var(--radius-control)] border border-black/10 bg-white p-3 text-sm font-semibold text-gray-900 transition-colors focus:border-gray-900 focus:outline-none dark:border-white/10 dark:bg-[#0a0a0a] dark:text-white dark:focus:border-white"
+                          className="field"
                           placeholder={label('commands.target_placeholder', 'Target, phrase, hotkey, or value')}
                         />
                         <button
                           onClick={() => removeAction(index)}
                           disabled={form.actions.length === 1}
                           aria-label={label('commands.remove_action', 'Remove action')}
-                          className="rounded-[var(--radius-control)] border border-red-500/20 bg-red-500/10 p-3 text-red-600 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400"
+                          className="btn-base px-2.5 py-2.5 bg-[var(--state-error)]/10 border-[var(--state-error)]/20 text-[var(--state-error)] hover:bg-[var(--state-error)]/20 disabled:cursor-not-allowed disabled:opacity-40"
                           title={label('commands.remove_action', 'Remove action')}
                         >
                           <Trash2 size={16} />
@@ -431,18 +423,18 @@ export const Commands = () => {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-black/10 bg-white/50 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-black/20">
+            <div className="flex justify-end gap-3 border-t border-[var(--border-default)] bg-[var(--surface-0)] p-6">
               <button
                 onClick={closeModal}
                 disabled={isSaving}
-                className="rounded-[var(--radius-control)] bg-gray-100 px-5 py-3 font-mono text-xs font-bold uppercase tracking-[0.12em] text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-60 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                className="btn-ghost"
               >
                 {label('commands.cancel', 'Cancel')}
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="rounded-[var(--radius-control)] bg-gray-950 px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.12em] text-white shadow-lg transition-colors hover:bg-gray-800 disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                className="btn-primary"
               >
                 {isSaving ? label('commands.saving', 'Saving...') : label('commands.save', 'Save Command')}
               </button>

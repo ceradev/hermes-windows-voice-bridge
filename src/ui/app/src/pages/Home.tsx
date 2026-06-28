@@ -1,281 +1,243 @@
-import React, { useEffect, useRef } from 'react';
-import { Activity, Volume2, Mic, Settings, Play, History, Pause, RefreshCw } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useHermes } from '../contexts/HermesContext';
-import { AudioVisualizer } from '../components/Audio/AudioVisualizer';
+import { Mic, Activity, Keyboard, Clock, ChevronRight, Copy, Search, Calendar, Settings, MessageSquare, Terminal } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 
-export const Home = ({ miniMode = false }: { miniMode?: boolean }) => {
+export const Home = () => {
   const { t } = useLanguage();
-  const { health, config, messages, audioLevel, isPaused, updateConfig, togglePause, restartApp } = useHermes();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const normalMessagesEndRef = useRef<HTMLDivElement>(null);
+  const { health, isPaused, runtime, config } = useHermes();
+  const navigate = useNavigate();
+  const [stats, setStats] = useState({ today: 0, week: 0 });
+  const [recentInteractions, setRecentInteractions] = useState<any[]>([]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (miniMode && messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-      } else if (!miniMode && normalMessagesEndRef.current) {
-        normalMessagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    // Mock loading stats and recent interactions for now, or fetch from DB if available
+    const loadData = async () => {
+      try {
+        const sessions = await api.getSessions();
+        if (sessions && sessions.length > 0) {
+          const msgs = await api.getMessages(sessions[0].id);
+          setRecentInteractions(msgs.slice(-5).reverse());
+          setStats({ today: msgs.length, week: msgs.length * 3 }); // Mocked stats
+        }
+      } catch (e) {
+        console.error(e);
       }
-    }, 150); // wait for fade-in animations to establish DOM height
-    return () => clearTimeout(timer);
-  }, [messages, miniMode]);
+    };
+    loadData();
+  }, []);
 
-  const handleQuickToggle = async (key: string, value: any) => {
-    await updateConfig({ [key]: value });
+  const getHeroGradient = () => {
+    if (!health) return 'radial-gradient(ellipse at top right, rgba(239,68,68,0.15), transparent 70%)';
+    if (isPaused) return 'radial-gradient(ellipse at top right, rgba(245,158,11,0.15), transparent 70%)';
+    if (runtime.listening_state !== 'idle') return 'radial-gradient(ellipse at top right, rgba(34,197,94,0.15), transparent 70%)';
+    return 'radial-gradient(ellipse at top right, rgba(99,102,241,0.15), transparent 70%)';
   };
 
-  const handlePauseToggle = async () => {
-    await togglePause();
+  const getStatusOrb = () => {
+    if (!health) return 'bg-[var(--state-error)] shadow-[0_0_12px_var(--state-error-glow)]';
+    if (isPaused) return 'bg-[var(--state-warn)]';
+    if (runtime.listening_state !== 'idle') return 'bg-[var(--state-ready)] shadow-[0_0_12px_var(--state-ready-glow)] animate-pulse-glow';
+    return 'bg-[var(--accent-primary)] shadow-[0_0_12px_var(--accent-primary-glow)]';
   };
 
-  const handleRestart = async () => {
-    await restartApp();
+  const getStatusText = () => {
+    if (!health) return 'Offline';
+    if (isPaused) return 'Paused';
+    if (runtime.listening_state === 'listening') return 'Listening...';
+    if (runtime.listening_state === 'thinking' || runtime.listening_state === 'processing') return 'Thinking...';
+    if (runtime.listening_state === 'speaking' || runtime.listening_state === 'responding') return 'Speaking...';
+    return 'Online · v2.1';
   };
-
-  const systemStatus = !health ? 'OFFLINE' : isPaused ? 'PAUSED' : 'READY';
-  const systemStatusTone = !health
-    ? 'text-red-600 dark:text-red-400'
-    : isPaused
-      ? 'text-amber-600 dark:text-amber-300'
-      : 'text-gray-950 dark:text-white';
-  const ledTone = health ? 'bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.85)]' : 'bg-red-500 shadow-[0_0_14px_rgba(239,68,68,0.85)]';
-
-  const rockerClass = "relative h-7 w-14 cursor-pointer border border-black/15 bg-black/10 shadow-inner transition-colors dark:border-white/15 dark:bg-white/10 peer-checked:bg-gray-950 dark:peer-checked:bg-white after:absolute after:left-[3px] after:top-[3px] after:h-5 after:w-6 after:bg-white after:shadow-sm after:transition-transform after:content-[''] dark:after:bg-gray-950 peer-checked:after:translate-x-5";
-
-  if (miniMode) {
-    return (
-      <div className="flex flex-col h-full w-full p-2 relative overflow-hidden animate-in fade-in duration-300">
-        <div className="absolute inset-0 z-0 opacity-10 pointer-events-none flex justify-center items-center">
-            <div 
-              className="w-48 h-48 bg-white/20 rounded-full blur-3xl"
-              style={{ 
-                transform: `scale(${1 + audioLevel * 1.5})`,
-                transition: 'transform 0.05s linear'
-              }}
-            />
-        </div>
-        
-        <div className="flex-1 flex flex-col items-center justify-center relative z-10 pt-2">
-          <div className="mb-2">
-            <AudioVisualizer audioLevel={audioLevel} isActive={!isPaused && health} />
-          </div>
-          
-          <div className="w-full px-2 flex-1 overflow-y-auto custom-scrollbar flex flex-col justify-start gap-2 relative pb-1" style={{ maskImage: 'linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)' }}>
-             <div className="flex-1 min-h-[min-content] flex flex-col justify-center">
-               {messages.length > 0 ? (
-                 (() => {
-                   // Find the last Hermes or System message
-                   const lastHermes = [...messages].reverse().find(m => m.role !== 'user');
-                   const m = lastHermes || messages[messages.length - 1];
-                   return (
-                     <div className="animate-in slide-in-from-bottom-2 fade-in flex flex-col items-center">
-                       <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
-                         m.role === 'user' ? 'text-white/40' : 
-                         m.role === 'system' ? 'text-red-400' : 'text-blue-300/80'
-                       }`}>
-                         {m.role === 'user' ? t('home.you') : m.role === 'system' ? 'ERROR' : 'Hermes'}
-                       </p>
-                       <p className={`text-sm font-medium leading-relaxed text-center ${
-                         m.role === 'system' ? 'text-red-300' :
-                         m.role === 'user' ? 'text-white/80' : 'text-white'
-                       } break-words max-w-full line-clamp-3`}>
-                         {m.content}
-                       </p>
-                     </div>
-                   );
-                 })()
-               ) : (
-                 <div className="flex justify-center items-center h-full mt-auto mb-auto">
-                   <p className="text-xs font-medium text-white/50">{t('home.listening', 'Escuchando...')}</p>
-                 </div>
-               )}
-               <div ref={messagesEndRef} />
-             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Top Banner */}
-      <div className="mb-5 grid grid-cols-1 gap-5 xl:grid-cols-[1.2fr_420px]">
-        <section className="glass-panel relative overflow-hidden rounded-[var(--radius-panel)] border-black/10 p-7 transition-colors duration-300 dark:border-white/10">
-          <div className="absolute inset-x-0 top-0 h-px bg-black/20 dark:bg-white/20" />
-          <div className="absolute right-5 top-5 flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
-            <span className={`h-2.5 w-2.5 rounded-full ${ledTone}`} />
-            {health ? t('home.connected') : t('home.offline')}
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+      {/* Status Hero */}
+      <div className="card-premium p-8 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div 
+          className="absolute inset-0 opacity-100 pointer-events-none transition-colors duration-700" 
+          style={{ background: getHeroGradient() }} 
+        />
+        
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`w-3.5 h-3.5 rounded-full ${getStatusOrb()} transition-all duration-500`} />
+            <h1 className="text-display text-[var(--text-primary)]">
+              Hermes is {getStatusText().toLowerCase()}
+            </h1>
           </div>
-
-          <div className="relative z-10 max-w-3xl pt-6">
-            <p className="mb-2 font-mono text-[11px] font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">Hermes Voice Bridge</p>
-            <h3 className={`font-sans text-7xl font-extrabold uppercase leading-none tracking-tighter [font-stretch:condensed] md:text-8xl ${systemStatusTone}`}>
-              {systemStatus}
-            </h3>
-            <p className="mt-5 max-w-xl text-sm font-semibold leading-6 text-gray-600 dark:text-gray-400">
-              {t('home.instruction', { hotkey: config.hotkey || 'CTRL+SHIFT+H' })}
-            </p>
-          </div>
-        </section>
-
-        <section className="glass-panel rounded-[var(--radius-panel)] p-4 transition-colors duration-300">
-          <div className="mb-3 flex items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
-            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Command Deck</p>
-            <Settings className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={handlePauseToggle}
-              className={`col-span-2 flex items-center justify-between rounded-[var(--radius-control)] border px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] transition-colors ${isPaused ? 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'border-black/10 bg-black/5 text-gray-900 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10'}`}
-            >
-              <span className="flex items-center gap-2">{isPaused ? <Play size={16} /> : <Pause size={16} />}{isPaused ? t('home.resume', 'Resume') : t('home.pause', 'Pause')}</span>
-              <span className="text-[10px] text-gray-500 dark:text-gray-400">CTRL</span>
-            </button>
-            <button
-              onClick={handleRestart}
-              className="col-span-2 flex items-center justify-between rounded-[var(--radius-control)] border border-black/10 bg-black/5 px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] text-gray-900 transition-colors hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
-            >
-              <span className="flex items-center gap-2"><RefreshCw size={16} />{t('home.restart', 'Restart')}</span>
-              <span className="text-[10px] text-gray-500 dark:text-gray-400">RST</span>
-            </button>
-            <div className="col-span-2 flex items-center justify-between rounded-[var(--radius-control)] border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/5">
-              <div className="flex items-center gap-3">
-                <div className="relative flex h-11 w-11 items-center justify-center border border-black/10 bg-white/50 dark:border-white/10 dark:bg-black/20">
-                  <div
-                    className="absolute inset-0 bg-black/10 dark:bg-white/20"
-                    style={{
-                      transform: `scale(${1 + audioLevel * 0.6})`,
-                      opacity: audioLevel > 0.02 ? 0.3 + audioLevel * 0.7 : 0,
-                      transition: 'transform 0.05s linear, opacity 0.1s ease-out'
-                    }}
-                  />
-                  <Mic className={`relative z-10 h-5 w-5 transition-colors ${audioLevel > 0.1 ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`} />
-                </div>
-                <div>
-                  <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Input Level</p>
-                  <p className="font-mono text-sm font-bold text-gray-900 dark:text-gray-100">{Math.round(audioLevel * 100).toString().padStart(2, '0')}%</p>
-                </div>
-              </div>
-              <AudioVisualizer audioLevel={audioLevel} isActive={!isPaused && health} />
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-3">
-        {/* Connection Status */}
-        <div className="glass-panel rounded-[var(--radius-panel)] p-5 transition-colors duration-300">
-          <div className="mb-4 flex items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
-            <h3 className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:text-gray-400">{t('home.connection')}</h3>
-            <span className="font-mono text-[10px] font-bold text-gray-500">NET</span>
-          </div>
-          <div className="mb-4 flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-[0.12em] text-gray-700 dark:text-gray-300">
-            <span className={`h-2.5 w-2.5 rounded-full ${ledTone}`} />
-            {health ? t('home.connected') : t('home.offline')}
-          </div>
-          <p className="truncate font-mono text-xs font-semibold text-gray-500 dark:text-gray-400">{config.api_base_url}</p>
-        </div>
-
-        {/* Quick Controls */}
-        <div className="glass-panel rounded-[var(--radius-panel)] p-5 transition-colors duration-300 md:col-span-2">
-          <div className="mb-4 flex items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
-            <h3 className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:text-gray-400">{t('home.quick_controls')}</h3>
-            <Settings className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex items-center justify-between rounded-[var(--radius-control)] border border-black/10 bg-black/5 p-4 transition-colors hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
-              <div className="flex items-center gap-3">
-                <Volume2 className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                <div>
-                  <span className="block text-sm font-bold text-gray-900 dark:text-gray-200">{t('home.tts_voice')}</span>
-                  <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">TTS_OUT</span>
-                </div>
-              </div>
-              <label className="relative inline-flex items-center">
-                <input type="checkbox" checked={config.tts_enabled ?? true} onChange={(e) => handleQuickToggle("tts_enabled", e.target.checked)} className="peer sr-only" />
-                <div className={rockerClass}></div>
-              </label>
-            </div>
-
-            <div className="flex items-center justify-between rounded-[var(--radius-control)] border border-black/10 bg-black/5 p-4 transition-colors hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
-              <div className="flex items-center gap-3">
-                <Play className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                <div>
-                  <span className="block text-sm font-bold text-gray-900 dark:text-gray-200">{t('home.autostart')}</span>
-                  <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">BOOT_SEQ</span>
-                </div>
-              </div>
-              <label className="relative inline-flex items-center">
-                <input type="checkbox" checked={config.autostart ?? true} onChange={(e) => handleQuickToggle("autostart", e.target.checked)} className="peer sr-only" />
-                <div className={rockerClass}></div>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        {/* Recent Activity */}
-        <div className="glass-panel flex h-[280px] flex-col rounded-[var(--radius-panel)] p-5 transition-colors duration-300">
-          <div className="mb-4 flex shrink-0 items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
-            <h3 className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:text-gray-400">{t('home.recent_activity')}</h3>
-            <History className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-          </div>
-
-          <div className="custom-scrollbar flex-1 overflow-y-auto pr-2">
-            {messages.length === 0 ? (
-              <p className="mt-10 text-center text-sm font-semibold text-gray-500 dark:text-gray-400">{t('home.no_messages')}</p>
+          <p className="text-body text-[var(--text-secondary)] flex items-center gap-2">
+            {recentInteractions.length > 0 ? (
+              <>
+                <Mic size={14} className="text-[var(--text-tertiary)]" />
+                <span>Last command: "{recentInteractions[0].content.substring(0, 40)}{recentInteractions[0].content.length > 40 ? '...' : ''}"</span>
+              </>
             ) : (
-              messages.map((m: any, idx: number) => (
-                <div key={idx} className="mb-2 grid grid-cols-[42px_1fr] gap-3 border-b border-black/10 bg-black/5 p-3 transition-colors last:border-b-0 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border border-black/10 bg-white/60 text-gray-800 dark:border-white/10 dark:bg-black/20 dark:text-gray-200">
-                    {m.role === 'user' ? <Mic size={14} /> : <span className="font-mono text-xs font-bold">H</span>}
+              'Waiting for your commands...'
+            )}
+          </p>
+        </div>
+        
+        <div className="text-left md:text-right relative z-10">
+          <p className="eyebrow text-[var(--text-tertiary)] mb-1">System Status</p>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--surface-0)] border border-[var(--border-subtle)]">
+            <span className={`w-2 h-2 rounded-full ${health ? 'bg-[var(--state-ready)]' : 'bg-[var(--state-error)]'}`} />
+            <span className="text-xs font-medium text-[var(--text-primary)]">{getStatusText()}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="card-premium p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+              <Mic size={16} />
+              <span className="eyebrow">Mic Status</span>
+            </div>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+              runtime.listening_state === 'idle' ? 'bg-[var(--surface-2)] text-[var(--text-secondary)]' :
+              'bg-[var(--accent-primary-glow)] text-[var(--accent-primary)] border border-[var(--accent-primary)] shadow-[0_0_8px_var(--accent-primary-glow)] animate-pulse-glow'
+            }`}>
+              {runtime.listening_state}
+            </span>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--text-tertiary)] leading-tight">Microphone is currently {runtime.listening_state}</p>
+          </div>
+        </div>
+        
+        <div className="card-premium p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+              <Activity size={16} />
+              <span className="eyebrow">Activity</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-end gap-2 mb-2">
+              <p className="text-display leading-none">{stats.today}</p>
+              <p className="text-xs text-[var(--text-tertiary)] mb-0.5">cmds today</p>
+            </div>
+            <div className="h-1.5 w-full bg-[var(--surface-0)] rounded-full overflow-hidden border border-[var(--border-subtle)]">
+              <div 
+                className="h-full bg-[var(--accent-gradient)] rounded-full" 
+                style={{ width: `${Math.min(100, (stats.today / 50) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+        
+        <div className="card-premium p-5 flex flex-col justify-between">
+          <div className="flex items-center gap-2 text-[var(--text-secondary)] mb-4">
+            <Keyboard size={16} />
+            <span className="eyebrow">Quick Access</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-[var(--text-tertiary)]">Push to talk</p>
+            <div className="px-2.5 py-1 rounded bg-[var(--surface-1)] border-b-2 border-r border-t border-l border-[var(--border-strong)] text-xs font-mono font-bold text-[var(--text-primary)] shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+              {String(config.hotkey || 'CTRL+SHIFT+SPACE').toUpperCase()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Activity Feed */}
+        <div className="lg:col-span-2 card-premium flex flex-col overflow-hidden">
+          <div className="p-5 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-1)]">
+            <h2 className="text-heading flex items-center gap-2">
+              <Clock size={16} className="text-[var(--accent-primary)]" />
+              Recent Interactions
+            </h2>
+            <button onClick={() => navigate('/chat')} className="text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--accent-primary)] transition-colors">View all</button>
+          </div>
+          <div className="flex-1 p-2 bg-[var(--surface-0)]/50">
+            {recentInteractions.length === 0 ? (
+              <div className="p-8 text-center text-[var(--text-tertiary)] text-sm flex flex-col items-center justify-center gap-3">
+                <MessageSquare size={24} className="opacity-20" />
+                No recent interactions.
+              </div>
+            ) : (
+              recentInteractions.map((msg, idx) => (
+                <div 
+                  key={idx} 
+                  onClick={() => navigate('/chat')}
+                  className="flex items-center justify-between p-3 rounded-[var(--radius-md)] hover:bg-[var(--surface-2)] cursor-pointer transition-all group"
+                >
+                  <div className="flex items-center gap-4 overflow-hidden">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border shadow-sm ${
+                      msg.role === 'user' 
+                        ? 'bg-[var(--surface-1)] border-[var(--border-subtle)]' 
+                        : 'bg-[var(--accent-primary-glow)] border-[var(--accent-primary)]/30'
+                    }`}>
+                      {msg.role === 'user' ? <Mic size={14} className="text-[var(--text-secondary)]" /> : <Activity size={14} className="text-[var(--accent-primary)]" />}
+                    </div>
+                    <div className="truncate">
+                      <p className="text-sm font-medium text-[var(--text-primary)] truncate" title={msg.content}>{msg.content}</p>
+                      <p className="text-[11px] font-medium text-[var(--text-tertiary)] flex items-center gap-1 mt-0.5 uppercase tracking-wider">
+                        {msg.role === 'user' ? 'You' : 'Hermes'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">{m.role === 'user' ? t('home.you') : 'Hermes'}</p>
-                    <p className="break-words text-sm font-semibold text-gray-900 dark:text-gray-200">{m.content}</p>
-                  </div>
+                  <ChevronRight size={16} className="text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                 </div>
               ))
             )}
-            <div ref={normalMessagesEndRef} />
           </div>
         </div>
 
-        {/* System Overview */}
-        <div className="glass-panel flex flex-col rounded-[var(--radius-panel)] p-5 transition-colors duration-300">
-          <div className="mb-4 flex items-center justify-between border-b border-black/10 pb-3 dark:border-white/10">
-            <h3 className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:text-gray-400">{t('home.system_profile')}</h3>
-            <Activity className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+        {/* Quick Commands */}
+        <div className="card-premium flex flex-col overflow-hidden">
+          <div className="p-5 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-1)]">
+            <h2 className="text-heading flex items-center gap-2">
+              <Terminal size={16} className="text-[var(--accent-secondary)]" />
+              Quick Actions
+            </h2>
           </div>
-
-          <div className="space-y-3">
-            <div>
-              <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">{t('home.stt_model')}</p>
-              <div className="rounded-[var(--radius-control)] border border-black/10 bg-black/5 px-3 py-2 font-mono text-sm font-bold text-gray-900 shadow-inner dark:border-white/10 dark:bg-white/5 dark:text-gray-200">
-                {config.stt_model || 'base'} ({config.stt_language || 'en'})
+          <div className="flex flex-col p-2 bg-[var(--surface-0)]/50 gap-1">
+            <button onClick={() => navigate('/commands')} className="flex items-center gap-3 p-3 rounded-[var(--radius-md)] hover:bg-[var(--surface-2)] transition-colors group text-left">
+              <div className="w-8 h-8 rounded bg-[var(--surface-1)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0 group-hover:border-[var(--accent-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                <Copy size={14} />
               </div>
-            </div>
-
-            <div>
-              <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">{t('home.wake_words')}</p>
-              <div className="flex flex-wrap gap-2 rounded-[var(--radius-control)] border border-black/10 bg-black/5 px-3 py-2 shadow-inner dark:border-white/10 dark:bg-white/5">
-                {(config.wake_phrases || []).map((w: string, i: number) => (
-                  <span key={i} className="border border-black/10 bg-white/70 px-2 py-1 font-mono text-xs font-bold text-gray-800 dark:border-white/10 dark:bg-black/20 dark:text-gray-200">
-                    {w}
-                  </span>
-                ))}
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[var(--text-primary)]">Copy Text</p>
+                <p className="text-[11px] text-[var(--text-tertiary)]">Extract text from screen</p>
               </div>
-            </div>
-
-            <div>
-              <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">{t('home.audio_device')}</p>
-              <div className="truncate rounded-[var(--radius-control)] border border-black/10 bg-black/5 px-3 py-2 font-mono text-sm font-bold text-gray-900 shadow-inner dark:border-white/10 dark:bg-white/5 dark:text-gray-200">
-                {config.mic_device !== null && config.mic_device !== undefined ? `Device ID: ${config.mic_device}` : t('home.default_mic')}
+              <ChevronRight size={14} className="text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+            <button onClick={() => navigate('/commands')} className="flex items-center gap-3 p-3 rounded-[var(--radius-md)] hover:bg-[var(--surface-2)] transition-colors group text-left">
+              <div className="w-8 h-8 rounded bg-[var(--surface-1)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0 group-hover:border-[var(--accent-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                <Search size={14} />
               </div>
-            </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[var(--text-primary)]">Search Web</p>
+                <p className="text-[11px] text-[var(--text-tertiary)]">Quick online query</p>
+              </div>
+              <ChevronRight size={14} className="text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+            <button onClick={() => navigate('/commands')} className="flex items-center gap-3 p-3 rounded-[var(--radius-md)] hover:bg-[var(--surface-2)] transition-colors group text-left">
+              <div className="w-8 h-8 rounded bg-[var(--surface-1)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0 group-hover:border-[var(--accent-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                <Calendar size={14} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[var(--text-primary)]">Agenda</p>
+                <p className="text-[11px] text-[var(--text-tertiary)]">View today's events</p>
+              </div>
+              <ChevronRight size={14} className="text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+            <button onClick={() => navigate('/settings')} className="flex items-center gap-3 p-3 rounded-[var(--radius-md)] hover:bg-[var(--surface-2)] transition-colors group text-left">
+              <div className="w-8 h-8 rounded bg-[var(--surface-1)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0 group-hover:border-[var(--accent-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                <Settings size={14} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[var(--text-primary)]">Config</p>
+                <p className="text-[11px] text-[var(--text-tertiary)]">System preferences</p>
+              </div>
+              <ChevronRight size={14} className="text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
           </div>
         </div>
       </div>

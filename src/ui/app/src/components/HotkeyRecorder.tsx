@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Zap } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export interface HotkeyRecorderProps {
   value: string;
@@ -34,8 +35,10 @@ function isValidShortcut(keys: Set<string>): boolean {
 export const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
   value,
   onChange,
-  placeholder = 'CLICK TO RECORD',
+  placeholder,
 }) => {
+  const { t } = useLanguage();
+  const resolvedPlaceholder = placeholder ?? t('shortcuts.recorder_placeholder', 'CLICK TO RECORD');
   const [state, setState] = useState<RecordingState>(value ? 'captured' : 'idle');
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
@@ -131,39 +134,44 @@ export const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
   const isRecording = state === 'recording';
   const isCaptured = state === 'captured' || (!isRecording && value);
 
+  const ariaLabel = isRecording
+    ? t('shortcuts.recorder_aria_recording', 'Recording hotkey, press escape to cancel')
+    : t('shortcuts.recorder_aria_idle', 'Click to record hotkey');
+  const clearAriaLabel = t('shortcuts.recorder_clear', 'Clear hotkey');
+
   return (
     <div
       ref={containerRef}
       onClick={handleClick}
       tabIndex={0}
       role="button"
-      aria-label={isRecording ? 'Recording hotkey, press escape to cancel' : 'Click to record hotkey'}
+      aria-label={ariaLabel}
       className={`
         group relative flex items-center gap-3 px-4 py-3
-        rounded-[var(--radius-control)] border-2 cursor-pointer
+        rounded-[var(--radius-control)] border cursor-pointer
         transition-all duration-300 select-none outline-none
         min-w-[260px] min-h-[52px]
         ${
           isRecording
-            ? 'border-amber-500 bg-[#0a0a0a] shadow-[0_0_16px_rgba(245,158,11,0.25)] animate-pulse'
+            ? 'border-[var(--state-warn)] bg-[var(--surface-0)] shadow-[0_0_16px_var(--state-warn-glow)] animate-pulse'
             : isCaptured
-            ? 'border-gray-600 bg-[#0a0a0a] hover:border-gray-400'
-            : 'border-gray-700 bg-[#0a0a0a] hover:border-gray-500'
+            ? 'border-[var(--border-strong)] bg-[var(--surface-1)] hover:border-[var(--text-primary)]'
+            : 'border-[var(--border-default)] bg-[var(--surface-0)] hover:border-[var(--border-strong)]'
         }
       `}
     >
       {isRecording && (
         <Zap
           size={16}
-          className="text-amber-500 animate-pulse shrink-0"
+          className="text-[var(--state-warn)] animate-pulse shrink-0"
           aria-hidden="true"
         />
       )}
 
       <div className="flex flex-1 items-center gap-2 overflow-hidden">
         {isRecording ? (
-          <span className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-amber-500 animate-pulse">
-            LISTENING...
+          <span className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-[var(--state-warn)] animate-pulse">
+            {t('shortcuts.recorder_listening', 'LISTENING…')}
           </span>
         ) : isCaptured && hotkeyParts.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
@@ -172,9 +180,9 @@ export const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
                 key={`${key}-${index}`}
                 className="
                   inline-flex items-center px-2.5 py-1
-                  bg-[#141414] border border-gray-600
+                  bg-[var(--surface-2)] border border-[var(--border-strong)]
                   rounded-[4px] font-mono font-bold text-[11px]
-                  text-white shadow-[inset_0_-2px_0_rgba(255,255,255,0.05)]
+                  text-[var(--text-primary)] shadow-[inset_0_-2px_0_rgba(255,255,255,0.05)]
                   uppercase tracking-wider
                 "
               >
@@ -183,8 +191,8 @@ export const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
             ))}
           </div>
         ) : (
-          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-            {placeholder}
+          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)]">
+            {resolvedPlaceholder}
           </span>
         )}
       </div>
@@ -194,10 +202,10 @@ export const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
           onClick={handleClear}
           className="
             flex items-center justify-center w-6 h-6 rounded
-            text-gray-500 hover:text-white hover:bg-gray-800
+            text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]
             transition-colors focus:outline-none shrink-0
           "
-          aria-label="Clear hotkey"
+          aria-label={clearAriaLabel}
           tabIndex={0}
         >
           <X size={14} />
