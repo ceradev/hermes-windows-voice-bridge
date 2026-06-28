@@ -17,7 +17,7 @@ class Database:
     def _run_migrations(self):
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         # Create migrations table if not exists
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS _migrations (
@@ -25,15 +25,15 @@ class Database:
                 applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        
+
         current_version = cursor.execute('SELECT MAX(version) FROM _migrations').fetchone()[0] or 0
-        
+
         migrations = self._get_migrations()
         for version, sql in sorted(migrations.items()):
             if version > current_version:
                 cursor.executescript(sql)
                 cursor.execute('INSERT INTO _migrations (version) VALUES (?)', (version,))
-                
+
         conn.commit()
         conn.close()
 
@@ -48,7 +48,7 @@ class Database:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT 0
                 );
-                
+
                 CREATE TABLE messages (
                     id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -63,5 +63,17 @@ class Database:
             ''',
             2: '''
                 ALTER TABLE sessions ADD COLUMN remote_session_id TEXT;
-            '''
+            ''',
+            3: '''
+                ALTER TABLE sessions ADD COLUMN title_source TEXT NOT NULL DEFAULT 'manual';
+
+                UPDATE sessions
+                SET title_source = 'system'
+                WHERE TRIM(name) IN ('New Session', 'Default Session');
+
+                UPDATE sessions
+                SET title_source = 'manual'
+                WHERE title_source = 'system'
+                  AND TRIM(name) NOT IN ('New Session', 'Default Session');
+            ''',
         }
