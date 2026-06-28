@@ -1,27 +1,15 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { api, RuntimeState } from '../services/api';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import { api, type HermesConfigUpdate, type RuntimeState, type RuntimeStatus } from '../services/api';
+import type { ChatMessage } from '../types/webview';
 
-type RuntimeSnapshot = RuntimeState['runtime'] & {
-  hotkey?: string;
-  mic_device?: number | null;
-  mic_device_name?: string;
-  mic_device_hostapi?: number | null;
-  overlay_enabled?: boolean;
-  overlay_mode?: string;
-  overlay_x?: number | null;
-  overlay_y?: number | null;
-  overlay_visible?: boolean;
-  listening_state?: string;
-  overlay_detail?: string;
-  overlay_request?: string;
-  overlay_response?: string;
-};
+type RuntimeSnapshot = RuntimeStatus;
 
 interface HermesContextType {
   health: boolean;
   healthChecked: boolean;
-  config: Record<string, unknown>;
-  messages: Array<{ id: string; role: string; content: string; timestamp?: string }>;
+  config: HermesConfigUpdate;
+  messages: ChatMessage[];
   audioLevel: number;
   isPaused: boolean;
   runtime: RuntimeSnapshot;
@@ -33,7 +21,7 @@ interface HermesContextType {
   overlayVisible: boolean;
   listeningState: string;
   overlayDetail: string;
-  updateConfig: (updates: Record<string, unknown>) => Promise<void>;
+  updateConfig: (updates: HermesConfigUpdate) => Promise<void>;
   updateOverlayConfig: (updates: {
     overlay_enabled?: boolean;
     overlay_mode?: string;
@@ -75,8 +63,8 @@ const pickRuntime = (snapshot: RuntimeState | null | undefined): RuntimeSnapshot
 export const HermesProvider = ({ children }: { children: ReactNode }) => {
   const [health, setHealth] = useState(false);
   const [healthChecked, setHealthChecked] = useState(false);
-  const [config, setConfig] = useState<Record<string, unknown>>({});
-  const [messages, setMessages] = useState<Array<{ id: string; role: string; content: string; timestamp?: string }>>([]);
+  const [config, setConfig] = useState<HermesConfigUpdate>({});
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [audioLevel, setAudioLevel] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -108,7 +96,7 @@ export const HermesProvider = ({ children }: { children: ReactNode }) => {
     const configData = await api.getConfig();
     setConfig(configData);
 
-    const sessions = await api.getSessions() as Array<{ id: string; is_active: boolean }>;
+    const sessions = await api.getSessions();
     if (sessions && sessions.length > 0) {
       const active = sessions.find((s) => s.is_active);
       if (active) {
@@ -127,7 +115,7 @@ export const HermesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const fetchMessages = async (sessionId: string) => {
-    const msgs = await api.getMessages(sessionId) as Array<{ id: string; role: string; content: string; timestamp?: string }>;
+    const msgs = await api.getMessages(sessionId);
     setMessages(msgs.slice(-20));
   };
 
@@ -135,7 +123,7 @@ export const HermesProvider = ({ children }: { children: ReactNode }) => {
     if (activeSessionId) {
       await fetchMessages(activeSessionId);
     } else {
-      const sessions = await api.getSessions() as Array<{ id: string; is_active: boolean }>;
+      const sessions = await api.getSessions();
       if (sessions && sessions.length > 0) {
         const active = sessions.find((s) => s.is_active);
         if (active) {
@@ -177,7 +165,7 @@ export const HermesProvider = ({ children }: { children: ReactNode }) => {
             setConfig(configData);
           }
 
-          const sessions = await api.getSessions() as Array<{ id: string; is_active: boolean }>;
+          const sessions = await api.getSessions();
           if (sessions && sessions.length > 0) {
             const active = sessions.find((s) => s.is_active);
             if (active) {
@@ -245,7 +233,7 @@ export const HermesProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [activeSessionId]);
 
-  const updateConfig = async (updates: Record<string, unknown>) => {
+  const updateConfig = async (updates: HermesConfigUpdate) => {
     const previousConfig = config;
     const newConfig = { ...config, ...updates };
     setConfig(newConfig);
@@ -269,9 +257,9 @@ export const HermesProvider = ({ children }: { children: ReactNode }) => {
             ? String(updates.overlay_mode).toLowerCase()
             : prev.overlay_mode,
         overlay_x:
-          'overlay_x' in updates ? (updates.overlay_x as number | null) : prev.overlay_x,
+          'overlay_x' in updates ? updates.overlay_x ?? null : prev.overlay_x,
         overlay_y:
-          'overlay_y' in updates ? (updates.overlay_y as number | null) : prev.overlay_y,
+          'overlay_y' in updates ? updates.overlay_y ?? null : prev.overlay_y,
       }));
     }
 
@@ -295,24 +283,20 @@ export const HermesProvider = ({ children }: { children: ReactNode }) => {
     overlay_enabled?: boolean;
     overlay_mode?: string;
   }) => {
-    await updateConfig(updates as Record<string, unknown>);
+    await updateConfig(updates);
   };
 
   const togglePause = async () => {
     const newPaused = !isPaused;
     setIsPaused(newPaused);
-    if ((api as unknown as { pauseApp?: (p: boolean) => Promise<void> }).pauseApp) {
-      await (api as unknown as { pauseApp: (p: boolean) => Promise<void> }).pauseApp(newPaused);
-    }
+    await api.pauseApp(newPaused);
     refreshRuntime().catch((err) => {
       console.error('Pause runtime refresh error:', err);
     });
   };
 
   const restartApp = async () => {
-    if ((api as unknown as { restartApp?: () => Promise<void> }).restartApp) {
-      await (api as unknown as { restartApp: () => Promise<void> }).restartApp();
-    }
+    await api.restartApp();
   };
 
   const overlayEnabled = runtime.overlay_enabled ?? true;
