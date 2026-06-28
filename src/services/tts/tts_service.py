@@ -1,4 +1,6 @@
 import queue
+import logging
+import queue
 import threading
 import time
 import re
@@ -23,6 +25,8 @@ except ImportError:
 # Hide pygame welcome message
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
+logger = logging.getLogger(__name__)
+
 class TTSService:
     def __init__(self, mode: str = "both", voice_name: str = "", rate: int = 215):
         self.mode = mode if mode in {"off", "beep", "voice", "both"} else "both"
@@ -32,11 +36,14 @@ class TTSService:
         self.queue: "queue.Queue[Optional[str]]" = queue.Queue()
         self.voice_failed = False
         self.is_speaking = False
+        self._stop_event = threading.Event()
+        self._closed = False
+        self._lock = threading.Lock()
         
         if pygame is not None:
             pygame.mixer.init()
         
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread = threading.Thread(target=self._run, name="HermesTTS", daemon=True)
         self.thread.start()
 
     def update_settings(self, mode: str, voice_name: str):
@@ -57,8 +64,12 @@ class TTSService:
     def say(self, text: str) -> None:
         if self.mode not in {"voice", "both"} or not text:
             return
-        for chunk in self._chunk_tts_text(text):
-            self.queue.put(chunk)
+        chunks = self._chunk_tts_text(text)
+        with self._lock:
+            if self._closed:
+                return
+            for chunk in chunks:
+                self.queue.put(chunk)
 
     def pulse(self, text: str) -> None:
         self.beep()
@@ -138,15 +149,46 @@ class TTSService:
             
             pygame.mixer.music.load(temp_file)
             pygame.mixer.music.play()
-            while pygame.mixer.music.get_busy():
+            while pygame.mixer.music.get_busy() and not self._stop_event.is_set():
                 time.sleep(0.05)
+            if self._stop_event.is_set():
+                pygame.mixer.music.stop()
         finally:
-            pygame.mixer.music.unload()
+            try:
+                pygame.mixer.music.unload()
+            except Exception as exc:
+                logger.debug("Could not unload TTS audio during cleanup: %s", exc)
             try:
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("Could not remove temporary TTS file %s: %s", temp_file, exc)
+
+    def shutdown(self, timeout: float = 2.0) -> None:
+        """Stop the TTS worker by sending a sentinel and joining the thread."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._stop_event.set()
+
+            while True:
+                try:
+                    self.queue.get_nowait()
+                except queue.Empty:
+                    break
+            self.queue.put(None)
+
+        if pygame is not None:
+            try:
+                pygame.mixer.music.stop()
+            except Exception as exc:
+                logger.debug("Could not stop pygame mixer during TTS shutdown: %s", exc)
+
+        if self.thread.is_alive():
+            self.thread.join(timeout=timeout)
+        if self.thread.is_alive():
+            logger.warning("TTS worker did not stop within %.1f seconds", timeout)
 
     def _run(self) -> None:
         if edge_tts is None or pygame is None:
@@ -158,6 +200,9 @@ class TTSService:
             if text is None:
                 self.is_speaking = False
                 return
+            if self._stop_event.is_set():
+                self.is_speaking = False
+                continue
             try:
                 self.is_speaking = True
                 self._speak_once(text)
@@ -166,7 +211,7 @@ class TTSService:
                 else:
                     self.is_speaking = False
             except Exception as e:
-                print(f"[TTS] Error procesando audio: {e}")
+                logger.warning("[TTS] Error procesando audio: %s", e)
                 self.is_speaking = False
                 # Do not return! Let the thread stay alive for the next message.
                 time.sleep(1)
