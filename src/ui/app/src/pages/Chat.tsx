@@ -4,7 +4,7 @@ import { MessageSquare, Plus, Trash2, Copy, Clock, Globe, Volume2, Download, Act
 import { useToast } from '../contexts/ToastContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SectionHeader } from '../components/Layout/PageHeader';
-import type { RecentActivity } from '../types';
+import type { RecentActivity, SessionRecord, ChatMessage } from '../types';
 
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
@@ -15,10 +15,10 @@ const formatTimestamp = (timestamp: string) => {
 };
 
 export const Chat = () => {
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activity, setActivity] = useState<RecentActivity[]>([]);
-  const [activeSession, setActiveSession] = useState<any>(null);
+  const [activeSession, setActiveSession] = useState<SessionRecord | null>(null);
   const [viewMode, setViewMode] = useState<'chat' | 'activity'>('chat');
   const [inputText, setInputText] = useState("");
   const { toast } = useToast();
@@ -29,7 +29,7 @@ export const Chat = () => {
     setSessions(list);
     
     if (viewMode === 'chat') {
-      const active = list.find((s: any) => s.is_active);
+      const active = list.find((s) => s.is_active);
       if (active) {
         setActiveSession(active);
         const msgs = await api.getMessages(active.id);
@@ -72,14 +72,14 @@ export const Chat = () => {
     if (!inputText.trim()) return;
     const text = inputText;
     setInputText("");
-    setMessages((prev: any) => [...prev, { role: "user", content: text, id: Date.now() }]);
+    setMessages((prev) => [...prev, { role: "user" as const, content: text, id: Date.now() }]);
     await api.sendMessage(text);
     await loadData();
   };
 
   const handleExport = () => {
     if (!messages || messages.length === 0) return;
-    const content = messages.map((m: any) => `[${m.role.toUpperCase()}] ${m.content}`).join('\n\n');
+    const content = messages.map((m) => `[${m.role.toUpperCase()}] ${m.content}`).join('\n\n');
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -125,7 +125,7 @@ export const Chat = () => {
             </div>
             
             <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-              {sessions.map((s: any) => (
+              {sessions.map((s) => (
                 <div 
                   key={s.id}
                   onClick={() => handleSwitchSession(s.id)}
@@ -203,14 +203,14 @@ export const Chat = () => {
                     No messages in this session.
                   </div>
                 ) : (
-                  messages.map((m: any) => (
+                  messages.map((m) => (
                     <div key={m.id} className={`flex flex-col animate-in slide-in-from-bottom-2 duration-300 ${m.role === 'user' ? 'items-end' : 'items-start'} group`}>
                       <div className={`max-w-[80%] rounded-2xl px-5 py-3.5 ${m.role === 'user' ? 'bg-[var(--text-primary)] text-[var(--bg-base)] rounded-br-sm' : 'bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] rounded-bl-sm'}`}>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
                       </div>
                       
                       <div className={`flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity px-1 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                        {m.role === 'hermes' && m.latency_ms > 0 && (
+                        {m.role === 'hermes' && m.latency_ms && m.latency_ms > 0 && (
                           <div className="flex items-center gap-1 text-[10px] text-[var(--text-tertiary)] bg-[var(--surface-0)] px-2 py-1 rounded border border-[var(--border-subtle)]">
                             <Clock size={10} />
                             <span>{m.latency_ms}ms</span>

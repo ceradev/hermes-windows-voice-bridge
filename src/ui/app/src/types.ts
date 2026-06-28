@@ -89,3 +89,40 @@ export type CustomCommand = {
   trigger_phrases: string[];
   actions: CustomCommandAction[];
 };
+
+export type SessionRecord = {
+  id: string;
+  name: string;
+  is_active?: boolean;
+  remote_session_id?: string;
+  created_at?: string;
+};
+
+export type ChatMessage = {
+  id: string | number;
+  role: 'user' | 'hermes' | 'system';
+  content: string;
+  source?: string;
+  status?: string;
+  latency_ms?: number;
+  timestamp?: string;
+};
+
+export type AudioDevice = {
+  index: number;
+  name: string;
+  max_input_channels: number;
+  default_samplerate: number;
+  hostapi?: number;
+};
+
+export type SendMessageResponse = {
+  success: boolean;
+  response?: string;
+  message_id?: string | number;
+  latencyMs?: number;
+  remoteSessionId?: string;
+  error?: string;
+};
+
+export type AddCustomCommandResponse = CustomCommand & { id: string };

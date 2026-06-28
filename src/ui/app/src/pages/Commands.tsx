@@ -143,14 +143,13 @@ export const Commands = () => {
 
     setIsSaving(true);
     try {
-      let saved = false;
       if (editingCommand) {
-        saved = await api.updateCustomCommand(editingCommand.id, payload);
+        const saved = await api.updateCustomCommand(editingCommand.id, payload);
         if (!saved) throw new Error('update_custom_command returned false');
         success(label('commands.update_success', 'Command updated'));
       } else {
-        saved = await api.addCustomCommand(payload);
-        if (!saved) throw new Error('add_custom_command returned false');
+        const result = await api.addCustomCommand(payload);
+        if (!result?.id) throw new Error('add_custom_command returned no id');
         success(label('commands.create_success', 'Command created'));
       }
       resetModal();
