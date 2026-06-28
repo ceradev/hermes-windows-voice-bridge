@@ -18,6 +18,7 @@ class VoiceLoop:
         self._thread = None
         self._cancel_flag = False
         self._restart_stream = False
+        self._last_wake_attempt = 0.0
 
         if hasattr(self.bridge, "set_voice_loop"):
             self.bridge.set_voice_loop(self)
@@ -139,14 +140,27 @@ class VoiceLoop:
                                 if len(wake_buffer) > wake_frames_max:
                                     wake_buffer.pop(0)
 
-                                combined = np.concatenate(wake_buffer)
-                                text = self.wakeword.transcribe(combined, language=self.config.get("stt_language", "es"), vad_filter=False)
+                                now = time.time()
+                                cooldown = self.config.get("wake_cooldown_seconds", 1.0)
+                                if now - self._last_wake_attempt < cooldown:
+                                    continue
 
-                                phrases = self.config.get("wake_phrases", [])
-                                if text and self.wakeword.contains_wake_phrase(text, phrases):
-                                    print(f"Wake phrase detected! Transcription: {text}")
-                                    auto_listen = self._handle_command(stream, blocksize, silence_rms, source="voice")
+                                # Only run full STT once the wake window is full.
+                                # VAD is enabled here to avoid transcribing pure noise.
+                                if len(wake_buffer) >= wake_frames_max:
+                                    combined = np.concatenate(wake_buffer)
+                                    text = self.wakeword.transcribe(
+                                        combined,
+                                        language=self.config.get("stt_language", "es"),
+                                        vad_filter=True,
+                                    )
+                                    self._last_wake_attempt = now
                                     wake_buffer.clear()
+
+                                    phrases = self.config.get("wake_phrases", [])
+                                    if text and self.wakeword.contains_wake_phrase(text, phrases):
+                                        print(f"Wake phrase detected! Transcription: {text}")
+                                        auto_listen = self._handle_command(stream, blocksize, silence_rms, source="voice")
                             else:
                                 wake_buffer.clear()
                         except Exception as e:
