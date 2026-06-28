@@ -12,6 +12,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src.core.config.config_service import ConfigService
 from src.core.session.session_manager import SessionManager
+from src.core.state import AppStateStore
 from src.storage.database import Database
 from src.services.hermes.hermes_client import HermesClient
 from src.services.audio.audio_service import AudioService
@@ -116,7 +117,21 @@ def main():
 
     config = ConfigService()
     db = Database(db_path)
-    session_manager = SessionManager(db)
+    app_state = AppStateStore()
+    app_state.patch_runtime(
+        hotkey=str(config.get("hotkey", "") or ""),
+        mic_device=config.get("mic_device", None),
+        mic_device_name=str(config.get("mic_device_name", "") or ""),
+        mic_device_hostapi=config.get("mic_device_hostapi", None),
+        overlay_enabled=bool(config.get("overlay_enabled", True)),
+        overlay_mode=str(config.get("overlay_mode", "mini") or "mini").lower(),
+        overlay_x=config.get("overlay_x", None),
+        overlay_y=config.get("overlay_y", None),
+        overlay_visible=False,
+        listening_state="idle",
+    )
+    app_state.patch_service("bridge", state="starting", detail="desktop_app_boot", last_updated_at=time.strftime("%Y-%m-%dT%H:%M:%S"))
+    session_manager = SessionManager(db, app_state=app_state)
 
     hermes = HermesClient(config)
     audio = AudioService()
@@ -143,13 +158,38 @@ def main():
         tts,
         autostart,
         shortcut_manager=shortcut_manager,
+        app_state=app_state,
     )
 
-    overlay = OverlayService()
+    def on_overlay_position_change(x: int, y: int) -> None:
+        config.update({"overlay_x": x, "overlay_y": y})
+        bridge.set_runtime_overlay_position(x, y)
+
+    def on_overlay_visibility_change(visible: bool) -> None:
+        bridge.set_runtime_overlay_visibility(visible)
+
+    def on_overlay_dashboard_click() -> None:
+        window.show()
+        
+    def on_overlay_mic_click() -> None:
+        shortcut_manager._triggered.add("trigger")
+
+    overlay = OverlayService(
+        initial_mode=str(config.get("overlay_mode", "mini") or "mini").lower(),
+        enabled=bool(config.get("overlay_enabled", True)),
+        initial_x=config.get("overlay_x", None),
+        initial_y=config.get("overlay_y", None),
+        on_position_change=on_overlay_position_change,
+        on_visibility_change=on_overlay_visibility_change,
+        on_open_dashboard=on_overlay_dashboard_click,
+        on_start_mic=on_overlay_mic_click,
+    )
     overlay.start()
+    bridge.set_overlay(overlay)
 
     voice_loop = VoiceLoop(config, audio, wakeword, bridge, shortcut_manager, tts, overlay)
     voice_loop.start()
+    bridge.set_voice_loop(voice_loop)
 
     from src.services.agent.proactive_service import ProactiveService
 
@@ -192,12 +232,30 @@ def main():
 
     def on_pause_toggle(paused: bool):
         voice_loop.is_paused = paused
+        bridge.set_runtime_paused(paused)
+        tray.set_paused(paused)
         if paused:
             shortcut_manager.stop()
         else:
             hotkey = config.get("hotkey", "")
-            if hotkey:
-                shortcut_manager.start(hotkey)
+            visual_hotkey = config.get("visual_hotkey", "")
+            if hotkey or visual_hotkey:
+                shortcut_manager.start(hotkey, visual_hotkey or None)
+
+    def on_change_microphone(device_index: int | None):
+        devices = audio.get_devices()
+        selected = next((device for device in devices if device.get("index") == device_index), None)
+        updates = {
+            "mic_device": device_index,
+            "mic_device_name": str(selected.get("name") or "") if selected else "",
+            "mic_device_hostapi": selected.get("hostapi") if selected else None,
+        }
+        updated = bridge.update_config(updates)
+        if updated:
+            label = str(selected.get("name") or "Default microphone") if selected else "Default microphone"
+            tray.notify("Microphone Updated", f"Active microphone: {label}")
+        else:
+            tray.notify("Microphone Error", "Could not update microphone selection")
 
     def on_restart(icon, item):
         import subprocess
@@ -234,6 +292,7 @@ def main():
         on_quit=on_quit,
         on_quick_command=on_quick_command,
         on_open_settings=on_open_app,
+        on_change_microphone=on_change_microphone,
     )
     tray.start()
     bridge.set_tray(tray)
@@ -249,7 +308,7 @@ def main():
     def poll_health():
         while True:
             try:
-                is_connected = hermes.health()
+                is_connected = bridge.check_health()
             except Exception:
                 is_connected = False
             tray.set_status(is_connected)

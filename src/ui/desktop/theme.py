@@ -3,20 +3,20 @@ from __future__ import annotations
 from tkinter import ttk
 
 PALETTE = {
-    "app_bg": "#0B1020",
-    "surface_bg": "#111827",
-    "sidebar_bg": "#0F172A",
-    "muted_fg": "#94A3B8",
-    "body_fg": "#E5E7EB",
-    "title_fg": "#FFFFFF",
-    "sidebar_fg": "#E5E7EB",
-    "sidebar_title_fg": "#CBD5E1",
-    "nav_hover": "#172033",
-    "accent": "#2563EB",
-    "pill_idle": "#1F2937",
-    "pill_active": "#3B82F6",
-    "log_bg": "#0F172A",
-    "danger": "#DC2626",
+    "app_bg": "#09090b",
+    "surface_bg": "#111111",
+    "sidebar_bg": "#0a0a0a",
+    "muted_fg": "#737373",
+    "body_fg": "#a3a3a3",
+    "title_fg": "#f5f5f5",
+    "sidebar_fg": "#a3a3a3",
+    "sidebar_title_fg": "#737373",
+    "nav_hover": "#171717",
+    "accent": "#3D2BFF",
+    "pill_idle": "#171717",
+    "pill_active": "#3D2BFF",
+    "log_bg": "#09090b",
+    "danger": "#ef4444",
 }
 
 
