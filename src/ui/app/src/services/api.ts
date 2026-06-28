@@ -35,6 +35,8 @@ export type RuntimeState = {
     overlay_visible?: boolean;
     listening_state?: ListeningState;
     overlay_detail?: string;
+    overlay_request?: string;
+    overlay_response?: string;
   };
 };
 

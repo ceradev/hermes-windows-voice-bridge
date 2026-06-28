@@ -13,6 +13,8 @@ type RuntimeSnapshot = RuntimeState['runtime'] & {
   overlay_visible?: boolean;
   listening_state?: string;
   overlay_detail?: string;
+  overlay_request?: string;
+  overlay_response?: string;
 };
 
 interface HermesContextType {
@@ -55,6 +57,8 @@ const DEFAULT_RUNTIME: RuntimeSnapshot = {
   overlay_visible: false,
   listening_state: 'idle',
   overlay_detail: '',
+  overlay_request: '',
+  overlay_response: '',
 };
 
 const HermesContext = createContext<HermesContextType | undefined>(undefined);
