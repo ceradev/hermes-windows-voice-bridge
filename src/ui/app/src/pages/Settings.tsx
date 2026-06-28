@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import { useEffect, useState } from 'react';
+import { api, type HermesConfigUpdate } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
-import { Save, Activity, Layout, Bell, Key, Globe, Monitor } from 'lucide-react';
+import { Save, Activity, Layout, Globe, Monitor } from 'lucide-react';
 import { SectionHeader } from '../components/Layout/PageHeader';
 import { useHermes } from '../contexts/HermesContext';
 
 export const Settings = () => {
-  const [config, setConfig] = useState<Record<string, unknown>>({});
+  const [config, setConfig] = useState<HermesConfigUpdate>({});
   const [isDirty, setIsDirty] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const { success, error } = useToast();
@@ -16,8 +16,8 @@ export const Settings = () => {
     api.getConfig().then(setConfig);
   }, []);
 
-  const handleChange = (key: string, value: unknown) => {
-    setConfig({ ...config, [key]: value });
+  const handleChange = <K extends keyof HermesConfigUpdate>(key: K, value: HermesConfigUpdate[K]) => {
+    setConfig((current) => ({ ...current, [key]: value }));
     setIsDirty(true);
   };
 
@@ -89,7 +89,7 @@ export const Settings = () => {
               <label className="text-xs font-medium text-[var(--text-secondary)] block mb-2">Endpoint URL</label>
               <input
                 type="text"
-                value={(config.api_base_url as string) || ''}
+                value={config.api_base_url || ''}
                 onChange={(e) => handleChange('api_base_url', e.target.value)}
                 className="field field-mono w-full text-sm"
                 placeholder="http://91.98.36.55:8642"
@@ -99,7 +99,7 @@ export const Settings = () => {
               <label className="text-xs font-medium text-[var(--text-secondary)] block mb-2">Webhook Secret</label>
               <input
                 type="password"
-                value={(config.api_token as string) || ''}
+                value={config.api_token || ''}
                 onChange={(e) => handleChange('api_token', e.target.value)}
                 className="field field-mono w-full text-sm"
                 placeholder="sk-..."
@@ -164,7 +164,7 @@ export const Settings = () => {
                 <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Launch Hermes automatically</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" checked={(config.autostart as boolean) || false} onChange={(e) => handleChange("autostart", e.target.checked)} className="sr-only peer" />
+                <input type="checkbox" checked={config.autostart || false} onChange={(e) => handleChange("autostart", e.target.checked)} className="sr-only peer" />
                 <div className="w-11 h-6 bg-[var(--surface-3)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
               </label>
             </div>
@@ -175,7 +175,7 @@ export const Settings = () => {
                 <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Hide in the system tray instead of taskbar</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" checked={(config.minimize_to_tray as boolean) || false} onChange={(e) => handleChange("minimize_to_tray", e.target.checked)} className="sr-only peer" />
+                <input type="checkbox" checked={config.minimize_to_tray || false} onChange={(e) => handleChange("minimize_to_tray", e.target.checked)} className="sr-only peer" />
                 <div className="w-11 h-6 bg-[var(--surface-3)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
               </label>
             </div>

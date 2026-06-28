@@ -1,13 +1,13 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { api, type ShortcutsConfig } from '../services/api';
+import { useEffect, useMemo, useState } from 'react';
+import { api, type HermesConfigUpdate, type ShortcutsConfig } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { Save, Mic, Keyboard, Volume2, Headphones } from 'lucide-react';
 import { SectionHeader } from '../components/Layout/PageHeader';
 import { HotkeyRecorder } from '../components/HotkeyRecorder';
-import type { AudioDevice } from '../types';
+import type { AudioDevice } from '../types/webview';
 
 export const Configure = () => {
-  const [config, setConfig] = useState<Record<string, unknown>>({});
+  const [config, setConfig] = useState<HermesConfigUpdate>({});
   const [shortcuts, setShortcuts] = useState<ShortcutsConfig>({ hotkey: '', mute_hotkey: '', pause_hotkey: '' });
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [isDirty, setIsDirty] = useState(false);
@@ -25,8 +25,8 @@ export const Configure = () => {
     });
   }, []);
 
-  const handleConfigChange = (key: string, value: unknown) => {
-    setConfig({ ...config, [key]: value });
+  const handleConfigChange = <K extends keyof HermesConfigUpdate>(key: K, value: HermesConfigUpdate[K]) => {
+    setConfig((current) => ({ ...current, [key]: value }));
     setIsDirty(true);
   };
 
@@ -73,25 +73,25 @@ export const Configure = () => {
             <div>
               <div className="flex justify-between mb-1">
                 <label className="text-sm font-medium">Wake energy threshold</label>
-                <span className="text-mono text-xs text-[var(--text-tertiary)]">{(config.wake_energy as number) || 0.008}</span>
+                <span className="text-mono text-xs text-[var(--text-tertiary)]">{config.wake_energy ?? 0.008}</span>
               </div>
-              <input type="range" min="0.001" max="0.05" step="0.001" value={(config.wake_energy as number) || 0.008} onChange={(e) => handleConfigChange("wake_energy", parseFloat(e.target.value))} className="w-full h-1.5 bg-[var(--surface-3)] rounded-lg appearance-none cursor-pointer" />
+              <input type="range" min="0.001" max="0.05" step="0.001" value={config.wake_energy ?? 0.008} onChange={(e) => handleConfigChange("wake_energy", parseFloat(e.target.value))} className="w-full h-1.5 bg-[var(--surface-3)] rounded-lg appearance-none cursor-pointer" />
             </div>
             
             <div>
               <div className="flex justify-between mb-1">
                 <label className="text-sm font-medium">Silence timeout</label>
-                <span className="text-mono text-xs text-[var(--text-tertiary)]">{(config.silence_timeout_seconds as number) || 2.5}s</span>
+                <span className="text-mono text-xs text-[var(--text-tertiary)]">{config.silence_timeout_seconds ?? 2.5}s</span>
               </div>
-              <input type="range" min="0.5" max="5.0" step="0.1" value={(config.silence_timeout_seconds as number) || 2.5} onChange={(e) => handleConfigChange("silence_timeout_seconds", parseFloat(e.target.value))} className="w-full h-1.5 bg-[var(--surface-3)] rounded-lg appearance-none cursor-pointer" />
+              <input type="range" min="0.5" max="5.0" step="0.1" value={config.silence_timeout_seconds ?? 2.5} onChange={(e) => handleConfigChange("silence_timeout_seconds", parseFloat(e.target.value))} className="w-full h-1.5 bg-[var(--surface-3)] rounded-lg appearance-none cursor-pointer" />
             </div>
             
             <div>
               <div className="flex justify-between mb-1">
                 <label className="text-sm font-medium">Max command duration</label>
-                <span className="text-mono text-xs text-[var(--text-tertiary)]">{(config.max_command_seconds as number) || 15}s</span>
+                <span className="text-mono text-xs text-[var(--text-tertiary)]">{config.max_command_seconds ?? 15}s</span>
               </div>
-              <input type="range" min="5" max="60" step="1" value={(config.max_command_seconds as number) || 15} onChange={(e) => handleConfigChange("max_command_seconds", parseInt(e.target.value))} className="w-full h-1.5 bg-[var(--surface-3)] rounded-lg appearance-none cursor-pointer" />
+              <input type="range" min="5" max="60" step="1" value={config.max_command_seconds ?? 15} onChange={(e) => handleConfigChange("max_command_seconds", parseInt(e.target.value))} className="w-full h-1.5 bg-[var(--surface-3)] rounded-lg appearance-none cursor-pointer" />
             </div>
           </div>
         </section>
@@ -108,7 +108,7 @@ export const Configure = () => {
               <div>
                 <label className="text-xs font-medium text-[var(--text-secondary)] block mb-2">Microphone Device</label>
                 <select
-                  value={(config.mic_device as number | null | undefined) ?? ''}
+                  value={config.mic_device ?? ''}
                   onChange={(e) => handleConfigChange('mic_device', e.target.value ? parseInt(e.target.value) : null)}
                   className="field field-mono w-full text-sm"
                 >
@@ -122,7 +122,7 @@ export const Configure = () => {
                 <label className="text-xs font-medium text-[var(--text-secondary)] block mb-2">Wake Phrases (comma separated)</label>
                 <input
                   type="text"
-                  value={Array.isArray(config.wake_phrases) ? (config.wake_phrases as string[]).join(', ') : (config.wake_phrases as string) ?? ''}
+                  value={Array.isArray(config.wake_phrases) ? config.wake_phrases.join(', ') : config.wake_phrases ?? ''}
                   onChange={(e) => handleConfigChange('wake_phrases', e.target.value.split(',').map((s: string) => s.trim()))}
                   className="field field-mono w-full text-sm"
                   placeholder="hey hermes, hermes"
@@ -173,7 +173,7 @@ export const Configure = () => {
                 <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Include a screenshot with the prompt</p>
               </div>
               <div className="w-48">
-                <HotkeyRecorder value={(config.visual_hotkey as string) || ''} onChange={(v) => handleConfigChange('visual_hotkey', v)} />
+                <HotkeyRecorder value={config.visual_hotkey || ''} onChange={(v) => handleConfigChange('visual_hotkey', v)} />
               </div>
             </div>
           </div>
@@ -190,7 +190,7 @@ export const Configure = () => {
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">Feedback Mode</label>
               <select
-                value={(config.feedback_mode as string) || "both"}
+                value={config.feedback_mode || "both"}
                 onChange={(e) => handleConfigChange("feedback_mode", e.target.value)}
                 className="field field-mono w-48 text-sm text-center"
               >

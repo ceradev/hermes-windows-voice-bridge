@@ -1,13 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useEffect, useState } from 'react';
 import { useHermes } from '../contexts/HermesContext';
 import { Mic, Activity, Keyboard, Clock, ChevronRight, Copy, Search, Calendar, Settings, MessageSquare, Terminal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import type { ChatMessage } from '../types';
+import type { ChatMessage } from '../types/webview';
 
 export const Home = () => {
-  const { t } = useLanguage();
   const { health, isPaused, runtime, config } = useHermes();
   const navigate = useNavigate();
   const [stats, setStats] = useState({ today: 0, week: 0 });

@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { MessageSquare, Plus, Trash2, Copy, Clock, Globe, Volume2, Download, Activity } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
-import { useLanguage } from '../contexts/LanguageContext';
 import { SectionHeader } from '../components/Layout/PageHeader';
-import type { RecentActivity, SessionRecord, ChatMessage } from '../types';
+import type { ChatMessage, RecentActivity, SessionRecord } from '../types/webview';
 
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
@@ -22,7 +21,6 @@ export const Chat = () => {
   const [viewMode, setViewMode] = useState<'chat' | 'activity'>('chat');
   const [inputText, setInputText] = useState("");
   const { toast } = useToast();
-  const { t } = useLanguage();
 
   const loadData = async () => {
     const list = await api.getSessions();
