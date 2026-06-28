@@ -4,6 +4,7 @@ import re
 from typing import Optional, Iterable, List
 from faster_whisper import WhisperModel
 
+
 class WakePhraseManager:
     def __init__(self, model_size: str = "base", device: str = "cpu", compute_type: str = "int8"):
         self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
@@ -32,5 +33,14 @@ class WakePhraseManager:
         if not text:
             return False
 
-        # Strictly check if any configured phrase is a substring of the spoken text
-        return any(self.normalize_text(phrase) in text for phrase in wake_phrases)
+        text_tokens = text.split()
+        for phrase in wake_phrases:
+            phrase_tokens = self.normalize_text(phrase).split()
+            if not phrase_tokens:
+                continue
+            # Require the wake phrase to match a contiguous sequence of whole words
+            window_size = len(phrase_tokens)
+            for i in range(len(text_tokens) - window_size + 1):
+                if text_tokens[i:i + window_size] == phrase_tokens:
+                    return True
+        return False
