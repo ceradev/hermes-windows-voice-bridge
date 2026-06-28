@@ -51,6 +51,22 @@ class ServiceHealth:
 
 
 @dataclass(slots=True)
+class RuntimeStatus:
+    connection_status: str = "unknown"
+    hotkey: str = ""
+    mic_device: int | None = None
+    mic_device_name: str = ""
+    mic_device_hostapi: int | None = None
+    overlay_enabled: bool = True
+    overlay_mode: str = "mini"
+    overlay_x: int | None = None
+    overlay_y: int | None = None
+    overlay_visible: bool = False
+    listening_state: str = "idle"
+    overlay_detail: str = ""
+
+
+@dataclass(slots=True)
 class AppState:
     lifecycle: str = "booting"
     overlay_state: str = "idle"
@@ -60,6 +76,7 @@ class AppState:
     session: SessionState = field(default_factory=SessionState)
     shortcut: ShortcutBinding = field(default_factory=ShortcutBinding)
     services: ServiceHealth = field(default_factory=ServiceHealth)
+    runtime: RuntimeStatus = field(default_factory=RuntimeStatus)
 
 
 StateListener = Callable[[AppState], None]
@@ -109,8 +126,24 @@ class AppStateStore:
         return self.update(shortcut=shortcut)
 
     def patch_service(self, service_name: str, **fields: Any) -> AppState:
-        services = self._state.services
-        current = getattr(services, service_name)
-        updated = replace(current, **fields)
-        next_services = replace(services, **{service_name: updated})
-        return self.update(services=next_services)
+        with self._lock:
+            services = self._state.services
+            current = getattr(services, service_name)
+            updated = replace(current, **fields)
+            next_services = replace(services, **{service_name: updated})
+            self._state = replace(self._state, services=next_services)
+            listeners = list(self._listeners)
+            state = self._state
+        for listener in listeners:
+            listener(state)
+        return state
+
+    def patch_runtime(self, **fields: Any) -> AppState:
+        with self._lock:
+            runtime = replace(self._state.runtime, **fields)
+            self._state = replace(self._state, runtime=runtime)
+            listeners = list(self._listeners)
+            state = self._state
+        for listener in listeners:
+            listener(state)
+        return state

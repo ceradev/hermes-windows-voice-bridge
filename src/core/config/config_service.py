@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -15,6 +16,8 @@ class ConfigService:
         "wake_phrases": ["hermes", "oye hermes", "hey hermes"],
         "hotkey": "ctrl+shift+h",
         "mic_device": None,
+        "mic_device_name": "",
+        "mic_device_hostapi": None,
         "tts_enabled": True,
         "feedback_mode": "both",
         "feedback_voice": "",
@@ -32,17 +35,23 @@ class ConfigService:
         "silence_timeout_seconds": 2.5,
         "max_command_seconds": 15.0,
         "custom_commands": [],
+        "overlay_enabled": True,
+        "overlay_mode": "mini",
+        "overlay_x": None,
+        "overlay_y": None,
+        "notifications_enabled": True,
     }
 
     def __init__(self, app_name: str = "HermesVoiceBridge"):
         appdata = os.environ.get("APPDATA")
         if not appdata:
             appdata = str(Path.home() / "AppData" / "Roaming")
-        
+
         self.config_dir = Path(appdata) / app_name
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.config_file = self.config_dir / "config.json"
-        
+        self._lock = threading.RLock()
+
         self._config: Dict[str, Any] = {}
         self.load()
 
@@ -58,12 +67,12 @@ class ConfigService:
                     self._config = {**self.DEFAULT_CONFIG, **loaded}
             except Exception:
                 self._config = self.DEFAULT_CONFIG.copy()
-                
+
         # Force migration of old local URL to the VPS URL if they haven't changed it
         if self._config.get("api_base_url") == "http://127.0.0.1:8642":
             self._config["api_base_url"] = "http://91.98.36.55:8642"
             self.save()
-            
+
         # Load API token from environment if not already configured
         env_token = os.environ.get("HERMES_API_TOKEN", "").strip()
         if env_token and not self._config.get("api_token"):
@@ -74,12 +83,12 @@ class ConfigService:
         if "webhook_url" in self._config:
             del self._config["webhook_url"]
             self.save()
-            
+
         # Enforce adjusted silence timeout to 2.5
         if self._config.get("silence_timeout_seconds") in (0.85, 1.8, 1.3):
             self._config["silence_timeout_seconds"] = 2.5
             self.save()
-            
+
         # Enforce lower initial timeout to 2.5
         if self._config.get("initial_timeout_seconds") == 5.0:
             self._config["initial_timeout_seconds"] = 2.5
@@ -93,8 +102,10 @@ class ConfigService:
         return self._config
 
     def save(self) -> None:
-        with open(self.config_file, "w", encoding="utf-8") as f:
-            json.dump(self._config, f, indent=2, ensure_ascii=False)
+        with self._lock:
+            snapshot = self._config.copy()
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(snapshot, f, indent=2, ensure_ascii=False)
         try:
             import stat
             os.chmod(self.config_file, stat.S_IRUSR | stat.S_IWUSR)
@@ -102,13 +113,16 @@ class ConfigService:
             pass
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._config.get(key, default)
+        with self._lock:
+            return self._config.get(key, default)
 
     def update(self, updates: Dict[str, Any]) -> None:
-        for key, value in updates.items():
-            if key in self.DEFAULT_CONFIG:
-                self._config[key] = value
+        with self._lock:
+            for key, value in updates.items():
+                if key in self.DEFAULT_CONFIG:
+                    self._config[key] = value
         self.save()
 
     def get_all(self) -> Dict[str, Any]:
-        return self._config.copy()
+        with self._lock:
+            return self._config.copy()

@@ -219,7 +219,7 @@ class AudioService:
             blocksize=blocksize,
         )
 
-    def record_command(self, stream: sd.InputStream, blocksize: int, silence_rms: float, silence_timeout_seconds: float, max_command_seconds: float, initial_timeout_seconds: float = 0.0, level_callback=None) -> np.ndarray:
+    def record_command(self, stream: sd.InputStream, blocksize: int, silence_rms: float, silence_timeout_seconds: float, max_command_seconds: float, initial_timeout_seconds: float = 0.0, level_callback=None, cancel_check=None) -> np.ndarray:
         # Flush any leftover audio in the buffer (like the beep sound)
         if stream.read_available > 0:
             stream.read(stream.read_available)
@@ -230,6 +230,9 @@ class AudioService:
         start_time = time.monotonic()
 
         while True:
+            if cancel_check and cancel_check():
+                return np.zeros((0,), dtype=np.float32)
+
             block, _overflow = stream.read(blocksize)
             audio = block[:, 0].astype(np.float32).copy()
             level = self.get_rms(audio)
