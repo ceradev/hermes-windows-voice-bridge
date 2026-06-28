@@ -10,13 +10,43 @@ export type ShortcutsConfig = {
   pause_hotkey: string;
 };
 
+export type OverlayMode = 'mini' | 'full' | string;
+export type ListeningState = 'idle' | 'listening' | 'hidden' | string;
+
+export type RuntimeState = {
+  lifecycle?: string;
+  overlay_state?: string;
+  last_transcript?: string;
+  last_response_preview?: string;
+  last_error?: string;
+  session?: Record<string, unknown>;
+  shortcut?: Record<string, unknown>;
+  services?: Record<string, unknown>;
+  runtime?: {
+    connection_status?: string;
+    hotkey?: string;
+    mic_device?: number | null;
+    mic_device_name?: string;
+    mic_device_hostapi?: number | null;
+    overlay_enabled?: boolean;
+    overlay_mode?: OverlayMode;
+    overlay_x?: number | null;
+    overlay_y?: number | null;
+    overlay_visible?: boolean;
+    listening_state?: ListeningState;
+    overlay_detail?: string;
+  };
+};
+
 type PywebviewApi = {
     get_config?: () => Promise<ConfigUpdates>;
     update_config?: (updates: ConfigUpdates) => Promise<boolean>;
+    get_runtime_state?: () => Promise<RuntimeState>;
     get_sessions?: () => Promise<SessionRecord[]>;
     create_session?: (name: string) => Promise<string>;
     switch_session?: (id: string) => Promise<boolean>;
-    delete_session?: (id: string) => Promise<void>;
+    delete_session?: (id: string) => Promise<boolean | void>;
+    rename_session?: (id: string, name: string) => Promise<boolean>;
     get_messages?: (sessionId: string) => Promise<any[]>;
     get_recent_activity?: () => Promise<RecentActivity[]>;
     send_message?: (text: string) => Promise<{ success: boolean; response?: string }>;
@@ -67,7 +97,14 @@ export const api = {
         return false;
     },
     deleteSession: async (id: string) => {
-        if (window.pywebview?.api?.delete_session) return await window.pywebview.api.delete_session(id);
+        if (window.pywebview?.api?.delete_session) {
+            await window.pywebview.api.delete_session(id);
+            return true;
+        }
+        return false;
+    },
+    renameSession: async (id: string, name: string) => {
+        if (window.pywebview?.api?.rename_session) return await window.pywebview.api.rename_session(id, name);
         return false;
     },
     getMessages: async (sessionId: string) => {
@@ -148,5 +185,9 @@ export const api = {
     },
     updateShortcuts: async (shortcuts: ShortcutsConfig) => {
         return await api.updateConfig(shortcuts);
+    },
+    getRuntimeState: async () => {
+        if (window.pywebview?.api?.get_runtime_state) return await window.pywebview.api.get_runtime_state();
+        return null;
     },
 };
