@@ -1,79 +1,72 @@
 import type {
-    CustomCommand as CustomCommandModel,
-    RecentActivity,
-    SessionRecord,
-    ChatMessage,
     AudioDevice,
+    ChatMessage,
+    CustomCommand,
+    CustomCommandPayload,
+    HermesConfig,
+    HermesConfigUpdate,
+    QuickCommand,
+    RecentActivity,
+    RuntimeStatus,
+    RuntimeState,
     SendMessageResponse,
-    AddCustomCommandResponse,
-} from '../types';
+    SessionRecord,
+    ShortcutsConfig,
+} from '../types/webview';
 
-type ConfigUpdates = Record<string, unknown>;
-type CustomCommandPayload = Omit<CustomCommandModel, 'id'>;
-
-export type ShortcutsConfig = {
-    hotkey: string;
-    mute_hotkey: string;
-    pause_hotkey: string;
-};
-
-export type OverlayMode = 'mini' | 'full' | string;
-export type ListeningState = 'idle' | 'listening' | 'hidden' | string;
-
-export type RuntimeState = {
-    lifecycle?: string;
-    overlay_state?: string;
-    last_transcript?: string;
-    last_response_preview?: string;
-    last_error?: string;
-    session?: Record<string, unknown>;
-    shortcut?: Record<string, unknown>;
-    services?: Record<string, unknown>;
-    runtime?: {
-        connection_status?: string;
-        hotkey?: string;
-        mic_device?: number | null;
-        mic_device_name?: string;
-        mic_device_hostapi?: number | null;
-        overlay_enabled?: boolean;
-        overlay_mode?: OverlayMode;
-        overlay_x?: number | null;
-        overlay_y?: number | null;
-        overlay_visible?: boolean;
-        listening_state?: ListeningState;
-        overlay_detail?: string;
-        overlay_request?: string;
-        overlay_response?: string;
-    };
-};
+export type {
+    AudioDevice,
+    ChatMessage,
+    CustomCommand,
+    CustomCommandPayload,
+    HermesConfig,
+    HermesConfigUpdate,
+    QuickCommand,
+    RecentActivity,
+    RuntimeStatus,
+    RuntimeState,
+    SendMessageResponse,
+    SessionRecord,
+    ShortcutsConfig,
+} from '../types/webview';
 
 type PywebviewApi = {
-    get_config?: () => Promise<ConfigUpdates>;
-    update_config?: (updates: ConfigUpdates) => Promise<boolean>;
+    show_error?: (title: string, message?: string) => Promise<boolean>;
     get_runtime_state?: () => Promise<RuntimeState>;
+    navigate_to?: (path: string) => Promise<void>;
+    get_config?: () => Promise<HermesConfig>;
+    update_config?: (updates: HermesConfigUpdate) => Promise<boolean>;
     get_sessions?: () => Promise<SessionRecord[]>;
     create_session?: (name: string) => Promise<string>;
-    switch_session?: (id: string) => Promise<boolean>;
-    delete_session?: (id: string) => Promise<void>;
-    rename_session?: (id: string, name: string) => Promise<boolean>;
+    switch_session?: (sessionId: string) => Promise<boolean>;
+    delete_session?: (sessionId: string) => Promise<void>;
+    rename_session?: (sessionId: string, newName: string) => Promise<boolean>;
     get_messages?: (sessionId: string) => Promise<ChatMessage[]>;
     get_recent_activity?: () => Promise<RecentActivity[]>;
-    send_message?: (text: string) => Promise<SendMessageResponse>;
-    speak_text?: (text: string) => Promise<boolean>;
-    get_audio_devices?: () => Promise<AudioDevice[]>;
-    check_health?: () => Promise<boolean>;
-    minimize_to_tray?: () => void;
-    maximize_window?: () => void;
-    close_app?: () => void;
-    exit_app?: () => void;
-    toggle_mini_mode?: (enable: boolean) => Promise<boolean>;
-    pause_app?: (paused: boolean) => Promise<boolean>;
-    restart_app?: () => Promise<boolean>;
-    get_custom_commands?: () => Promise<CustomCommandModel[]>;
-    add_custom_command?: (cmd: CustomCommandPayload) => Promise<AddCustomCommandResponse>;
-    update_custom_command?: (id: string, cmd: CustomCommandPayload) => Promise<boolean>;
+    save_vps_token?: (token: string) => Promise<boolean>;
+    get_vps_token?: () => Promise<string>;
+    get_custom_commands?: () => Promise<CustomCommand[]>;
+    add_custom_command?: (command: CustomCommandPayload) => Promise<CustomCommand>;
+    update_custom_command?: (id: string, command: CustomCommandPayload) => Promise<boolean>;
     delete_custom_command?: (id: string) => Promise<boolean>;
     test_custom_command?: (id: string) => Promise<boolean>;
+    get_audio_devices?: () => Promise<AudioDevice[]>;
+    check_health?: () => Promise<boolean>;
+    send_message?: (text: string, imageBase64?: string | null, source?: string) => Promise<SendMessageResponse>;
+    speak_text?: (text: string) => Promise<boolean>;
+    capture_hotkey?: (timeout?: number) => Promise<string>;
+    check_hotkey_conflict?: (hotkey: string) => Promise<boolean>;
+    get_quick_commands?: () => Promise<QuickCommand[]>;
+    run_quick_command?: (commandId: string) => Promise<boolean>;
+    notify_tray?: (title: string, message: string) => Promise<boolean>;
+    log_local_action?: (requestText: string, responseText: string) => Promise<boolean>;
+    toggle_mini_mode?: (enable: boolean) => Promise<boolean>;
+    minimize_to_tray?: () => Promise<void>;
+    maximize_window?: () => Promise<void>;
+    close_app?: () => Promise<void>;
+    exit_app?: () => Promise<void>;
+    pause_app?: (paused: boolean) => Promise<boolean>;
+    restart_app?: () => Promise<boolean>;
 };
 
 declare global {
@@ -84,146 +77,231 @@ declare global {
     }
 }
 
+const getPywebviewApi = (): PywebviewApi | undefined => window.pywebview?.api;
+
 export const api = {
-    getConfig: async (): Promise<ConfigUpdates> => {
-        if (window.pywebview?.api?.get_config) return await window.pywebview.api.get_config();
+    showError: async (title: string, message = ''): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.show_error) return bridge.show_error(title, message);
+        return false;
+    },
+
+    getConfig: async (): Promise<HermesConfigUpdate> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.get_config) return bridge.get_config();
         return {};
     },
 
-    updateConfig: async (updates: ConfigUpdates): Promise<boolean> => {
-        if (window.pywebview?.api?.update_config) return await window.pywebview.api.update_config(updates);
+    updateConfig: async (updates: HermesConfigUpdate): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.update_config) return bridge.update_config(updates);
         return false;
     },
 
     getSessions: async (): Promise<SessionRecord[]> => {
-        if (window.pywebview?.api?.get_sessions) return await window.pywebview.api.get_sessions();
+        const bridge = getPywebviewApi();
+        if (bridge?.get_sessions) return bridge.get_sessions();
         return [];
     },
 
     createSession: async (name: string): Promise<string> => {
-        if (window.pywebview?.api?.create_session) return await window.pywebview.api.create_session(name);
-        return "";
+        const bridge = getPywebviewApi();
+        if (bridge?.create_session) return bridge.create_session(name);
+        return '';
     },
 
     switchSession: async (id: string): Promise<boolean> => {
-        if (window.pywebview?.api?.switch_session) return await window.pywebview.api.switch_session(id);
+        const bridge = getPywebviewApi();
+        if (bridge?.switch_session) return bridge.switch_session(id);
         return false;
     },
 
     deleteSession: async (id: string): Promise<boolean> => {
-        if (window.pywebview?.api?.delete_session) {
-            await window.pywebview.api.delete_session(id);
-            return true;
-        }
-        return false;
+        const bridge = getPywebviewApi();
+        if (!bridge?.delete_session) return false;
+        await bridge.delete_session(id);
+        return true;
     },
 
     renameSession: async (id: string, name: string): Promise<boolean> => {
-        if (window.pywebview?.api?.rename_session) return await window.pywebview.api.rename_session(id, name);
+        const bridge = getPywebviewApi();
+        if (bridge?.rename_session) return bridge.rename_session(id, name);
         return false;
     },
 
     getMessages: async (sessionId: string): Promise<ChatMessage[]> => {
-        if (window.pywebview?.api?.get_messages) return await window.pywebview.api.get_messages(sessionId);
+        const bridge = getPywebviewApi();
+        if (bridge?.get_messages) return bridge.get_messages(sessionId);
         return [];
     },
 
     getRecentActivity: async (): Promise<RecentActivity[]> => {
-        if (window.pywebview?.api?.get_recent_activity) return await window.pywebview.api.get_recent_activity();
+        const bridge = getPywebviewApi();
+        if (bridge?.get_recent_activity) return bridge.get_recent_activity();
         return [];
     },
 
-    sendMessage: async (text: string): Promise<SendMessageResponse> => {
-        if (window.pywebview?.api?.send_message) return await window.pywebview.api.send_message(text);
-        return { success: false, response: "Mock mode: API not connected" };
-    },
-
-    speakText: async (text: string): Promise<boolean> => {
-        if (window.pywebview?.api?.speak_text) return await window.pywebview.api.speak_text(text);
+    saveVpsToken: async (token: string): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.save_vps_token) return bridge.save_vps_token(token);
         return false;
     },
 
-    getAudioDevices: async (): Promise<AudioDevice[]> => {
-        if (window.pywebview?.api?.get_audio_devices) return await window.pywebview.api.get_audio_devices();
+    getVpsToken: async (): Promise<string> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.get_vps_token) return bridge.get_vps_token();
+        return '';
+    },
+
+    getCustomCommands: async (): Promise<CustomCommand[]> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.get_custom_commands) return bridge.get_custom_commands();
         return [];
     },
 
-    checkHealth: async (): Promise<boolean> => {
-        if (window.pywebview?.api?.check_health) return await window.pywebview.api.check_health();
-        return false;
+    addCustomCommand: async (command: CustomCommandPayload): Promise<CustomCommand> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.add_custom_command) return bridge.add_custom_command(command);
+        return { ...command, id: '' };
     },
 
-    minimizeToTray: (): void => {
-        if (window.pywebview?.api?.minimize_to_tray) window.pywebview.api.minimize_to_tray();
-    },
-
-    maximizeWindow: (): void => {
-        if (window.pywebview?.api?.maximize_window) window.pywebview.api.maximize_window();
-    },
-
-    closeApp: (): void => {
-        if (window.pywebview?.api?.close_app) window.pywebview.api.close_app();
-    },
-
-    exitApp: (): void => {
-        if (window.pywebview?.api?.exit_app) window.pywebview.api.exit_app();
-    },
-
-    toggleMiniMode: async (enable: boolean): Promise<boolean> => {
-        if (window.pywebview?.api?.toggle_mini_mode) return await window.pywebview.api.toggle_mini_mode(enable);
-        return false;
-    },
-
-    pauseApp: async (paused: boolean): Promise<boolean> => {
-        if (window.pywebview?.api?.pause_app) return await window.pywebview.api.pause_app(paused);
-        return false;
-    },
-
-    restartApp: async (): Promise<boolean> => {
-        if (window.pywebview?.api?.restart_app) return await window.pywebview.api.restart_app();
-        return false;
-    },
-
-    getCustomCommands: async (): Promise<CustomCommandModel[]> => {
-        if (window.pywebview?.api?.get_custom_commands) return await window.pywebview.api.get_custom_commands();
-        return [];
-    },
-
-    addCustomCommand: async (cmd: CustomCommandPayload): Promise<AddCustomCommandResponse> => {
-        if (window.pywebview?.api?.add_custom_command) return await window.pywebview.api.add_custom_command(cmd);
-        return { ...cmd, id: "" };
-    },
-
-    updateCustomCommand: async (id: string, cmd: CustomCommandPayload): Promise<boolean> => {
-        if (window.pywebview?.api?.update_custom_command) return await window.pywebview.api.update_custom_command(id, cmd);
+    updateCustomCommand: async (id: string, command: CustomCommandPayload): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.update_custom_command) return bridge.update_custom_command(id, command);
         return false;
     },
 
     deleteCustomCommand: async (id: string): Promise<boolean> => {
-        if (window.pywebview?.api?.delete_custom_command) return await window.pywebview.api.delete_custom_command(id);
+        const bridge = getPywebviewApi();
+        if (bridge?.delete_custom_command) return bridge.delete_custom_command(id);
         return false;
     },
 
     testCustomCommand: async (id: string): Promise<boolean> => {
-        if (window.pywebview?.api?.test_custom_command) return await window.pywebview.api.test_custom_command(id);
+        const bridge = getPywebviewApi();
+        if (bridge?.test_custom_command) return bridge.test_custom_command(id);
         return false;
+    },
+
+    getAudioDevices: async (): Promise<AudioDevice[]> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.get_audio_devices) return bridge.get_audio_devices();
+        return [];
+    },
+
+    checkHealth: async (): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.check_health) return bridge.check_health();
+        return false;
+    },
+
+    sendMessage: async (text: string, imageBase64: string | null = null, source = 'voice'): Promise<SendMessageResponse> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.send_message) return bridge.send_message(text, imageBase64, source);
+        return { success: false, response: 'Mock mode: API not connected' };
+    },
+
+    speakText: async (text: string): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.speak_text) return bridge.speak_text(text);
+        return false;
+    },
+
+    captureHotkey: async (timeout?: number): Promise<string> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.capture_hotkey) return bridge.capture_hotkey(timeout);
+        return '';
+    },
+
+    checkHotkeyConflict: async (hotkey: string): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.check_hotkey_conflict) return bridge.check_hotkey_conflict(hotkey);
+        return false;
+    },
+
+    getQuickCommands: async (): Promise<QuickCommand[]> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.get_quick_commands) return bridge.get_quick_commands();
+        return [];
+    },
+
+    runQuickCommand: async (commandId: string): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.run_quick_command) return bridge.run_quick_command(commandId);
+        return false;
+    },
+
+    notifyTray: async (title: string, message: string): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.notify_tray) return bridge.notify_tray(title, message);
+        return false;
+    },
+
+    logLocalAction: async (requestText: string, responseText: string): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.log_local_action) return bridge.log_local_action(requestText, responseText);
+        return false;
+    },
+
+    minimizeToTray: async (): Promise<void> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.minimize_to_tray) await bridge.minimize_to_tray();
+    },
+
+    maximizeWindow: async (): Promise<void> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.maximize_window) await bridge.maximize_window();
+    },
+
+    closeApp: async (): Promise<void> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.close_app) await bridge.close_app();
+    },
+
+    exitApp: async (): Promise<void> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.exit_app) await bridge.exit_app();
+    },
+
+    toggleMiniMode: async (enable: boolean): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.toggle_mini_mode) return bridge.toggle_mini_mode(enable);
+        return false;
+    },
+
+    pauseApp: async (paused: boolean): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.pause_app) return bridge.pause_app(paused);
+        return false;
+    },
+
+    restartApp: async (): Promise<boolean> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.restart_app) return bridge.restart_app();
+        return false;
+    },
+
+    navigateTo: async (path: string): Promise<void> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.navigate_to) await bridge.navigate_to(path);
     },
 
     getShortcuts: async (): Promise<ShortcutsConfig> => {
         const cfg = await api.getConfig();
         return {
-            hotkey: (cfg.hotkey as string) || "CTRL+SHIFT+H",
-            mute_hotkey: (cfg.mute_hotkey as string) || "",
-            pause_hotkey: (cfg.pause_hotkey as string) || "",
+            hotkey: cfg.hotkey || 'CTRL+SHIFT+H',
+            mute_hotkey: cfg.mute_hotkey || '',
+            pause_hotkey: cfg.pause_hotkey || '',
         };
     },
 
     updateShortcuts: async (shortcuts: ShortcutsConfig): Promise<boolean> => {
-        return await api.updateConfig(shortcuts);
+        return api.updateConfig(shortcuts);
     },
 
     getRuntimeState: async (): Promise<RuntimeState | null> => {
-        if (window.pywebview?.api?.get_runtime_state) return await window.pywebview.api.get_runtime_state();
+        const bridge = getPywebviewApi();
+        if (bridge?.get_runtime_state) return bridge.get_runtime_state();
         return null;
     },
 };
