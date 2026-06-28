@@ -19,6 +19,9 @@ class VoiceLoop:
         self._cancel_flag = False
         self._restart_stream = False
         self._last_wake_attempt = 0.0
+        self._activation_lock = threading.Lock()
+        self._listening_active = False
+        self._pending_listen_source: str | None = None
 
         if hasattr(self.bridge, "set_voice_loop"):
             self.bridge.set_voice_loop(self)
@@ -33,13 +36,66 @@ class VoiceLoop:
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
-    def stop(self):
+    def stop(self, timeout: float = 2.0):
         self._running = False
+        self._cancel_flag = True
+        self._restart_stream = True
         if self._thread:
-            self._thread.join(timeout=2.0)
+            self._thread.join(timeout=timeout)
 
     def request_stream_restart(self):
         self._restart_stream = True
+
+    def request_listening(self, source: str = "manual", *, cancel_if_active: bool = True) -> str:
+        """Queue or cancel a listening session from any UI thread.
+
+        Returns ``"queued"`` when the voice loop accepted a new activation,
+        ``"cancelled"`` when an active recording was asked to stop, and
+        ``"ignored"`` when another activation is already pending.
+        """
+        normalized_source = str(source or "manual").strip().lower() or "manual"
+        with self._activation_lock:
+            if self._listening_active:
+                if cancel_if_active:
+                    self._cancel_flag = True
+                    return "cancelled"
+                return "ignored"
+            if self._pending_listen_source is not None:
+                return "ignored"
+            self._pending_listen_source = normalized_source
+            return "queued"
+
+    def _consume_listen_request(self) -> str | None:
+        with self._activation_lock:
+            source = self._pending_listen_source
+            self._pending_listen_source = None
+            return source
+
+    def _begin_listening(self, source: str) -> bool:
+        with self._activation_lock:
+            if self._listening_active:
+                return False
+            self._listening_active = True
+            self._pending_listen_source = None
+            self._cancel_flag = False
+            return True
+
+    def _finish_listening(self) -> None:
+        self._clear_activation_triggers()
+        with self._activation_lock:
+            self._listening_active = False
+            self._pending_listen_source = None
+            self._cancel_flag = False
+
+    def _clear_activation_triggers(self) -> None:
+        try:
+            self.shortcut_manager.clear_trigger()
+        except Exception:
+            pass
+        try:
+            self.shortcut_manager.clear_visual_trigger()
+        except Exception:
+            pass
 
     def _loop(self):
         sample_rate = 16000
@@ -107,6 +163,12 @@ class VoiceLoop:
                         if auto_listen:
                             time.sleep(0.3) # Give user a tiny breath window after TTS stops
                             auto_listen = self._handle_command(stream, blocksize, silence_rms, source="auto")
+                            wake_buffer.clear()
+                            continue
+
+                        requested_source = self._consume_listen_request()
+                        if requested_source:
+                            auto_listen = self._handle_command(stream, blocksize, silence_rms, source=requested_source)
                             wake_buffer.clear()
                             continue
 
@@ -179,15 +241,27 @@ class VoiceLoop:
         """
         if self.shortcut_manager.is_triggered():
             self.shortcut_manager.clear_trigger()
-            self._cancel_flag = True
+            with self._activation_lock:
+                self._cancel_flag = True
             return True
         if self.shortcut_manager.is_visual_triggered():
             self.shortcut_manager.clear_visual_trigger()
-            self._cancel_flag = True
+            with self._activation_lock:
+                self._cancel_flag = True
             return True
-        return False
+        with self._activation_lock:
+            return self._cancel_flag
 
     def _handle_command(self, stream, blocksize, silence_rms, source="voice"):
+        if not self._begin_listening(source):
+            print(f"[MIC] Ignoring {source} activation because listening is already active.")
+            return False
+        try:
+            return self._handle_command_unlocked(stream, blocksize, silence_rms, source=source)
+        finally:
+            self._finish_listening()
+
+    def _handle_command_unlocked(self, stream, blocksize, silence_rms, source="voice"):
         image_base64 = None
         if source == "vision":
             print("[VISION] 📸 Tomando captura de pantalla...")

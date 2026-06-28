@@ -1,6 +1,7 @@
 import time
 import threading
 import logging
+import time
 from typing import Callable, List, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -12,19 +13,22 @@ class ProactiveService:
         self.thread = None
         self.timers = []
         self._lock = threading.Lock()
+        self._stop_event = threading.Event()
 
     def start(self):
         if self.running:
             return
         self.running = True
+        self._stop_event.clear()
         self.thread = threading.Thread(target=self._loop, daemon=True, name="ProactiveLoop")
         self.thread.start()
         logger.info("ProactiveService started.")
 
-    def stop(self):
+    def stop(self, timeout: float = 2.0):
         self.running = False
+        self._stop_event.set()
         if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=2.0)
+            self.thread.join(timeout=timeout)
         logger.info("ProactiveService stopped.")
 
     def add_timer(self, duration_seconds: int, prompt: str):
@@ -53,7 +57,7 @@ class ProactiveService:
             for t in triggered:
                 self._fire_event(t["prompt"])
 
-            time.sleep(1.0) # Check every second
+            self._stop_event.wait(1.0) # Check every second or stop immediately
 
     def _fire_event(self, prompt: str):
         logger.info(f"Proactive event fired: {prompt}")

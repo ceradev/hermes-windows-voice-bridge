@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, List, Optional
 
 import numpy as np
 import sounddevice as sd
+
+logger = logging.getLogger(__name__)
 
 class AudioService:
     def __init__(self, sample_rate: int = 16000, channels: int = 1):
@@ -12,6 +15,13 @@ class AudioService:
         self.channels = channels
         self.last_selected_device: Optional[dict[str, Any]] = None
         self.last_selection_reason: str = ""
+
+    def shutdown(self) -> None:
+        """Release sounddevice playback/recording resources during app shutdown."""
+        try:
+            sd.stop()
+        except Exception as exc:
+            logger.debug("Could not stop sounddevice streams during shutdown: %s", exc)
 
     def _get_default_input_index(self) -> Optional[int]:
         try:

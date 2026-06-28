@@ -1,7 +1,11 @@
 import math
+import logging
+import math
 import threading
 import tkinter as tk
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 
 class OverlayService:
@@ -78,10 +82,39 @@ class OverlayService:
         self._on_mode_change = on_mode_change
         self._on_open_dashboard = on_open_dashboard
         self._on_start_mic = on_start_mic
+        self._stopping = False
 
     def start(self) -> None:
+        self._stopping = False
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def stop(self, timeout: float = 1.0) -> None:
+        """Stop the overlay Tk loop and wait briefly for its thread to exit."""
+        self._stopping = True
+        self.animating = False
+        root = self.root
+
+        if root is not None:
+            def _shutdown() -> None:
+                self._notify_visibility(False)
+                try:
+                    root.quit()
+                    root.destroy()
+                except tk.TclError as exc:
+                    logger.debug("Overlay window was already closed: %s", exc)
+
+            try:
+                root.after(0, _shutdown)
+            except tk.TclError as exc:
+                logger.debug("Could not schedule overlay shutdown: %s", exc)
+
+        if self._thread and self._thread is not threading.current_thread():
+            self._thread.join(timeout=timeout)
+        if self._thread and self._thread.is_alive():
+            logger.warning("Overlay thread did not stop within %.1f seconds", timeout)
+        else:
+            self._thread = None
 
     def is_visible(self) -> bool:
         return self._visible
@@ -218,7 +251,11 @@ class OverlayService:
             self._notify_visibility(False)
 
         self._animate()
-        self.root.mainloop()
+        try:
+            self.root.mainloop()
+        finally:
+            self.canvas = None
+            self.root = None
 
     def _on_enter(self, event: Any) -> None:
         self.is_hovered = True
@@ -304,7 +341,7 @@ class OverlayService:
         return self.border_color
 
     def _animate(self) -> None:
-        if self.root is None or not self.canvas:
+        if self._stopping or self.root is None or not self.canvas:
             return
 
         target_w = self._target_width()
@@ -360,7 +397,8 @@ class OverlayService:
                 color = f"#{gray:02x}{gray:02x}{gray:02x}"
                 self.canvas.itemconfig(did, fill=color)
 
-        self.root.after(16, self._animate)
+        if not self._stopping and self.root is not None:
+            self.root.after(16, self._animate)
 
     def _hide_buttons(self) -> None:
         if not self.canvas:
