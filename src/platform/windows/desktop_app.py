@@ -1,10 +1,13 @@
 import logging
+# pyright: reportImportCycles=false
+import logging
 import os
 import sys
 import threading
 import time
 import webview
 from pathlib import Path
+from typing import Any
 
 # Add repo root to python path for imports
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -160,6 +163,7 @@ def main():
         shortcut_manager=shortcut_manager,
         app_state=app_state,
     )
+    window: Any = None
 
     def on_overlay_position_change(x: int, y: int) -> None:
         config.update({"overlay_x": x, "overlay_y": y})
@@ -167,6 +171,10 @@ def main():
 
     def on_overlay_visibility_change(visible: bool) -> None:
         bridge.set_runtime_overlay_visibility(visible)
+
+    def on_overlay_mode_change(mode: str) -> None:
+        config.update({"overlay_mode": mode})
+        bridge.set_runtime_overlay_mode(mode)
 
     def on_overlay_dashboard_click() -> None:
         window.show()
@@ -181,6 +189,7 @@ def main():
         initial_y=config.get("overlay_y", None),
         on_position_change=on_overlay_position_change,
         on_visibility_change=on_overlay_visibility_change,
+        on_mode_change=on_overlay_mode_change,
         on_open_dashboard=on_overlay_dashboard_click,
         on_start_mic=on_overlay_mic_click,
     )
