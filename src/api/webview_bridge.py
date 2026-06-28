@@ -1,4 +1,5 @@
 from collections import deque
+from collections import deque
 from datetime import datetime, timezone
 from importlib import import_module
 from typing import Any
@@ -399,6 +400,19 @@ class WebviewBridge:
             listening_state=normalized,
             overlay_visible=overlay_visible,
             overlay_detail=str(detail or ""),
+        )
+
+    def set_runtime_overlay_text(self, request_text: str = "", response_text: str = "") -> None:
+        request_preview = str(request_text or "")
+        response_preview = str(response_text or "")
+        self._app_state.update(
+            last_transcript=request_preview,
+            last_response_preview=response_preview,
+        )
+        self._app_state.patch_runtime(
+            overlay_request=request_preview,
+            overlay_response=response_preview,
+            overlay_detail=response_preview or request_preview,
         )
 
     def set_runtime_overlay_mode(self, mode: str) -> None:

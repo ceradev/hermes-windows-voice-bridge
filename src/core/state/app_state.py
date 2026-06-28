@@ -64,6 +64,8 @@ class RuntimeStatus:
     overlay_visible: bool = False
     listening_state: str = "idle"
     overlay_detail: str = ""
+    overlay_request: str = ""
+    overlay_response: str = ""
 
 
 @dataclass(slots=True)
