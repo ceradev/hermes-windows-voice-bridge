@@ -1,6 +1,11 @@
-numpy
-sounddevice
+edge-tts
 faster-whisper
-pystray
+keyring
+numpy
 pillow
+pygame
+pyinstaller
+pystray
 pyttsx3
+pywebview
+sounddevice
