@@ -1,12 +1,24 @@
-# -*- mode: python ; coding: utf-8 -*-
+import os
+
+
+SPECPATH = os.path.abspath(os.path.dirname(SPEC))
+
+
+def from_spec_root(*parts):
+    return os.path.join(SPECPATH, *parts)
+
+
+entry_script = from_spec_root("src", "platform", "windows", "desktop_app.py")
+ui_dist_dir = from_spec_root("src", "ui", "app", "dist")
+icon_file = from_spec_root("src", "ui", "app", "public", "favicon.ico")
 
 
 a = Analysis(
-    ['C:\\Users\\cesar\\Desktop\\Files\\Work\\Projects\\Personal\\hermes-windows-voice-bridge\\src\\platform\\windows\\desktop_app.py'],
-    pathex=[],
+    [entry_script],
+    pathex=[SPECPATH],
     binaries=[],
-    datas=[('C:\\Users\\cesar\\Desktop\\Files\\Work\\Projects\\Personal\\hermes-windows-voice-bridge\\src\\ui\\app\\dist', 'src/ui/app/dist')],
-    hiddenimports=['keyring.backends.Windows'],
+    datas=[(ui_dist_dir, "src/ui/app/dist")],
+    hiddenimports=["keyring.backends.Windows"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -21,7 +33,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='HermesVoiceBridge',
+    name="HermesVoiceBridge",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -32,7 +44,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['C:\\Users\\cesar\\Desktop\\Files\\Work\\Projects\\Personal\\hermes-windows-voice-bridge\\src\\ui\\app\\public\\favicon.ico'],
+    icon=icon_file if os.path.exists(icon_file) else None,
 )
 coll = COLLECT(
     exe,
@@ -41,5 +53,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='HermesVoiceBridge',
+    name="HermesVoiceBridge",
 )
