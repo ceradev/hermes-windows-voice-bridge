@@ -1,38 +1,27 @@
 import React from 'react';
 
-type SectionHeaderProps = {
-  eyebrow: string;
+type PageHeaderProps = {
   title: string;
-  description: string;
+  caption?: string;
+  description?: string;
   action?: React.ReactNode;
 };
 
-/**
- * Page-level section header. Used at the top of full pages (Voice, Hermes,
- * Settings, Shortcuts, Commands, TTS). Establishes a single visual rhythm:
- *   eyebrow (mono caps) → display title (large) → description (secondary)
- * with a right-aligned action slot.
- */
-export const SectionHeader: React.FC<SectionHeaderProps> = ({
-  eyebrow,
-  title,
-  description,
-  action,
-}) => {
+/** Single page title — shown once per route (not duplicated in titlebar). */
+export const PageHeader: React.FC<PageHeaderProps> = ({ title, caption, description, action }) => {
   return (
-    <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div className="min-w-0">
-        <p className="eyebrow eyebrow-accent text-[10px]">{eyebrow}</p>
-        <h1 className="mt-1.5 font-display text-[28px] font-bold tracking-[-0.02em] text-[var(--text-primary)]">
-          {title}
-        </h1>
-        {description && (
-          <p className="mt-1.5 max-w-2xl text-[13px] font-medium leading-relaxed text-[var(--text-secondary)]">
-            {description}
-          </p>
-        )}
+    <header className="ds-page-header">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          {caption ? <p className="ds-caption mb-1">{caption}</p> : null}
+          <h1 className="ds-page-title">{title}</h1>
+          {description ? <p className="ds-page-desc mt-1">{description}</p> : null}
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
-    </div>
+    </header>
   );
 };
+
+/** @deprecated Use PageHeader */
+export const SectionHeader = PageHeader;

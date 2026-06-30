@@ -42,6 +42,11 @@ export type HermesConfigValue =
   | CustomCommand[];
 
 export type HermesConfig = {
+  webhook_url: string;
+  webhook_secret: string;
+  webhook_sync: boolean;
+  webhook_timeout: number;
+  webhook_user_id: string;
   api_base_url: string;
   api_token: string;
   app_language: string;
@@ -108,6 +113,11 @@ export type ChatMessage = {
   latency_ms?: number | null;
   created_at?: string;
   timestamp?: string;
+};
+
+export type MessageStats = {
+  today: number;
+  week: number;
 };
 
 export type RecentActivity = {

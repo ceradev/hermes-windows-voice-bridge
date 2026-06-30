@@ -142,62 +142,86 @@ class AudioService:
     def get_devices(self) -> List[dict[str, Any]]:
         return self.select_input_device(None).get("devices", [])
 
+    def _earcon_envelope(self, length: int, *, attack_ms: float = 8.0, decay: float = 5.5) -> np.ndarray:
+        """Soft attack + exponential decay for unobtrusive UI feedback."""
+        fs = 44100
+        attack = max(1, int(fs * attack_ms / 1000.0))
+        env = np.ones(length, dtype=np.float32)
+        if attack < length:
+            env[:attack] = np.linspace(0.0, 1.0, attack, dtype=np.float32)
+            tail = np.arange(length - attack, dtype=np.float32) / fs
+            env[attack:] = np.exp(-tail * decay)
+        else:
+            env = np.linspace(0.0, 1.0, length, dtype=np.float32)
+        return env
+
+    def _synthesize_earcon(self, kind: str) -> np.ndarray:
+        """Generate subtle, modern earcon waveforms (mono float32, -1..1)."""
+        fs = 44100
+
+        def tone(freq: float, duration: float, amp: float, attack_ms: float = 8.0, decay: float = 5.5) -> np.ndarray:
+            length = max(1, int(fs * duration))
+            t = np.arange(length, dtype=np.float32) / fs
+            wave = np.sin(2.0 * np.pi * freq * t, dtype=np.float32)
+            return wave * self._earcon_envelope(length, attack_ms=attack_ms, decay=decay) * amp
+
+        def chirp(f0: float, f1: float, duration: float, amp: float) -> np.ndarray:
+            length = max(1, int(fs * duration))
+            t = np.arange(length, dtype=np.float32) / fs
+            freq = np.linspace(f0, f1, length, dtype=np.float32)
+            phase = 2.0 * np.pi * np.cumsum(freq) / fs
+            wave = np.sin(phase, dtype=np.float32)
+            wave += 0.12 * np.sin(phase * 2.0, dtype=np.float32)
+            return wave * self._earcon_envelope(length, attack_ms=6.0, decay=6.5) * amp
+
+        if kind == "wake":
+            # Soft upward "ready" ping — short and airy.
+            return chirp(520.0, 720.0, 0.10, 0.16)
+
+        if kind == "done":
+            # Gentle two-note confirmation, barely there.
+            note_a = tone(740.0, 0.07, 0.11, attack_ms=5.0, decay=7.0)
+            note_b = tone(880.0, 0.09, 0.10, attack_ms=5.0, decay=6.0)
+            gap = int(fs * 0.025)
+            return np.concatenate([note_a, np.zeros(gap, dtype=np.float32), note_b])
+
+        if kind == "error":
+            # Muted low tap — noticeable but not alarming.
+            return tone(320.0, 0.14, 0.12, attack_ms=4.0, decay=4.5)
+
+        return np.zeros(0, dtype=np.float32)
+
+    def _earcon_to_wav_bytes(self, samples: np.ndarray) -> bytes:
+        import io
+        import struct
+        import wave
+
+        clipped = np.clip(samples, -1.0, 1.0)
+        pcm = (clipped * 32767.0).astype(np.int16)
+        data = io.BytesIO()
+        with wave.open(data, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(44100)
+            w.writeframes(struct.pack("<" + "h" * len(pcm), *pcm.tolist()))
+        return data.getvalue()
+
     def play_earcon(self, kind: str = "wake"):
         try:
+            import threading
             import winsound
-            import wave
-            import io
-            import struct
-            import math
 
-            fs = 44100
-            if kind == "wake":
-                duration = 0.2
-                f1 = 523.25
-                f2 = 659.25
-            elif kind == "done":
-                duration = 0.25
-                f1 = 659.25
-                f2 = 523.25
-            elif kind == "error":
-                duration = 0.3
-                f1 = 200.0
-                f2 = 250.0
-            else:
+            samples = self._synthesize_earcon(kind)
+            if samples.size == 0:
                 return
 
-            data = io.BytesIO()
-            with wave.open(data, 'wb') as w:
-                w.setnchannels(1)
-                w.setsampwidth(2) # 16-bit
-                w.setframerate(fs)
-                
-                length = int(fs * duration)
-                attack = int(fs * 0.02)
-                samples = []
-                
-                for i in range(length):
-                    x = i / float(fs)
-                    note = math.sin(f1 * x * 2 * math.pi) + 0.5 * math.sin(f2 * x * 2 * math.pi)
-                    
-                    if i < attack:
-                        env = i / float(attack)
-                    else:
-                        env = math.exp(-(x - attack/fs) * 15)
-                        
-                    # Scale to 16-bit integer (max 32767). Volume at 60%
-                    s = int(note * env * 32767 * 0.6)
-                    s = max(-32768, min(32767, s))
-                    samples.append(s)
-                    
-                w.writeframes(struct.pack('<' + 'h' * len(samples), *samples))
-            
+            wav_bytes = self._earcon_to_wav_bytes(samples)
+
             def _play():
-                winsound.PlaySound(data.getvalue(), winsound.SND_MEMORY)
-            
-            import threading
+                winsound.PlaySound(wav_bytes, winsound.SND_MEMORY)
+
             threading.Thread(target=_play, daemon=True).start()
-            
+
         except Exception as e:
             print(f"Error playing earcon with winsound: {e}")
 

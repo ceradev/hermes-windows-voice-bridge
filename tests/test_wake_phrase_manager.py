@@ -65,6 +65,48 @@ def test_contains_wake_phrase_returns_false_for_empty_text() -> None:
     assert manager.contains_wake_phrase("   ", phrases) is False
 
 
+def test_contains_wake_phrase_matches_fuzzy_stt_variants() -> None:
+    manager = build_manager()
+    phrases = ["hermes", "hey hermes"]
+    assert manager.contains_wake_phrase("ermes", phrases) is True
+    assert manager.contains_wake_phrase("hey ermes", phrases) is True
+    assert manager.contains_wake_phrase("jermes que hora es", phrases) is True
+    assert manager.contains_wake_phrase("helmes", phrases) is True
+
+
+def test_split_wake_and_command_rejects_mid_sentence_hallucination() -> None:
+    manager = build_manager()
+    phrases = ["hermes", "hey hermes", "oye hermes"]
+    detected, cmd = manager.split_wake_and_command("dije hey ermes al final", phrases)
+    assert detected is False
+    assert cmd == ""
+
+    detected, cmd = manager.split_wake_and_command("armes hola", phrases)
+    assert detected is False
+    assert cmd == ""
+
+
+def test_split_wake_and_command_extracts_tail() -> None:
+    manager = build_manager()
+    phrases = ["hermes", "hey hermes", "oye hermes"]
+    detected, cmd = manager.split_wake_and_command("hey ermes que hora es", phrases)
+    assert detected is True
+    assert cmd == "que hora es"
+
+    detected, cmd = manager.split_wake_and_command("hermes", phrases)
+    assert detected is True
+    assert cmd == ""
+
+    detected, cmd = manager.split_wake_and_command("hola mundo", phrases)
+    assert detected is False
+    assert cmd == ""
+
+
+def test_build_stt_prompt_includes_wake_phrases() -> None:
+    manager = build_manager()
+    assert "hermes" in manager.build_stt_prompt(["Hey Hermes", "oye hermes"])
+
+
 def test_contains_wake_phrase_ignores_empty_phrases() -> None:
     manager = build_manager()
     phrases = ["", "hermes"]

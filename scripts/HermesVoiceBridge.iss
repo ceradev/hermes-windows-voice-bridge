@@ -1,3 +1,6 @@
+; DEPRECATED — use setup.iss in the repo root (PyInstaller output).
+; This legacy spec installed PowerShell scripts + source instead of HermesVoiceBridge.exe.
+
 #define MyAppName "Hermes Voice Bridge"
 #define MyAppVersion "0.2.0"
 #define MyAppPublisher "Nous Research"

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Play, X, Terminal, ListPlus } from 'lucide-react';
-import { SectionHeader } from '../components/Layout/PageHeader';
+import { PageHeader } from '../components/Layout/PageHeader';
 import { api } from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -189,33 +189,21 @@ export const Commands = () => {
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 flex h-full flex-col duration-500">
-      <SectionHeader
-        eyebrow="IF voice phrase THEN action chain"
-        title={label('commands.title', 'Custom Commands')}
-        description={label('commands.description', 'Create local voice shortcuts that trigger apps, searches, hotkeys, volume changes, or speech.')}
+    <div className="flex h-full flex-col">
+      <PageHeader
+        title={label('commands.title', 'Custom commands')}
+        description={`${label('commands.description', 'Create local voice shortcuts that trigger apps, searches, hotkeys, volume changes, or speech.')}${commands.length > 0 ? ` · ${commands.length} ${label('commands.count_suffix', 'configured')}` : ''}`}
         action={
           <button
             onClick={openCreateModal}
-            className="btn-base"
+            className="btn-primary px-4 py-2 text-[15px] font-semibold"
           >
-            <Plus size={16} /> {label('commands.new', 'New Command')}
+            <Plus size={18} /> {label('commands.new', 'New command')}
           </button>
         }
       />
 
-      <div className="surface-base flex min-h-0 flex-1 flex-col overflow-hidden transition-all duration-300">
-        <div className="flex shrink-0 items-center justify-between border-b border-[var(--border-default)] p-5">
-          <div>
-            <h4 className="eyebrow">
-              {label('commands.library', 'Command Library')}
-            </h4>
-            <p className="mt-1 font-mono text-[10px] uppercase text-[var(--text-tertiary)]">
-              {commands.length} {label('commands.count_suffix', 'configured')}
-            </p>
-          </div>
-        </div>
-
+      <div className="surface-base flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="custom-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto p-4 pb-20">
           {isLoading ? (
             <div className="flex h-64 flex-col gap-4">
@@ -242,7 +230,7 @@ export const Commands = () => {
                 className="group grid grid-cols-1 gap-4 surface-raised p-4 transition-colors hover:border-[var(--border-strong)] lg:grid-cols-[220px_1fr_auto]"
               >
                 <div className="min-w-0 border-b border-[var(--border-subtle)] pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
-                  <p className="mb-2 eyebrow text-[var(--text-tertiary)]">IF</p>
+                  <p className="mb-2 text-caption text-[var(--text-tertiary)]">If</p>
                   <h4 className="mb-3 truncate text-heading">{command.name}</h4>
                   <div className="flex flex-wrap gap-2">
                     {command.trigger_phrases.map((phrase, index) => (
@@ -258,18 +246,18 @@ export const Commands = () => {
 
                 <div className="min-w-0">
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="eyebrow text-[var(--text-tertiary)]">THEN</p>
-                    <span className="font-mono text-[10px] text-[var(--text-muted)]">
+                    <p className="text-caption text-[var(--text-tertiary)]">Then</p>
+                    <span className="text-caption text-[var(--text-muted)]">
                       {command.actions.length} {label('commands.actions', 'actions')}
                     </span>
                   </div>
                   <div className="relative space-y-3 pl-9 before:absolute before:left-[13px] before:top-3 before:bottom-3 before:w-px before:bg-[var(--border-subtle)]">
                     {command.actions.map((action, index) => (
                       <div key={`${action.type}-${index}`} className="relative surface-base px-3 py-2">
-                        <span className="absolute -left-9 top-2 flex h-7 w-7 items-center justify-center surface-base text-[10px] text-[var(--text-secondary)]">
+                        <span className="absolute -left-9 top-2 flex h-7 w-7 items-center justify-center surface-base text-caption text-[var(--text-secondary)]">
                           {formatStep(index)}
                         </span>
-                        <p className="eyebrow mb-1 text-[var(--text-tertiary)]">{action.type}</p>
+                        <p className="text-caption mb-1 text-[var(--text-tertiary)]">{action.type}</p>
                         <p className="truncate text-body text-[var(--text-primary)]">{action.target}</p>
                       </div>
                     ))}
@@ -312,15 +300,14 @@ export const Commands = () => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-5 backdrop-blur-sm">
           <div className="surface-base flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden shadow-card" role="dialog" aria-modal="true" aria-labelledby="commands-dialog-title">
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--border-default)] p-6">
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--border-default)] p-5">
               <div>
-                <p className="eyebrow-accent">Command Chain Editor</p>
-                <h3 id="commands-dialog-title" className="mt-1.5 text-display">
-                  {editingCommand ? label('commands.edit_title', 'Edit Command') : label('commands.create_title', 'New Command')}
+                <h3 id="commands-dialog-title" className="ds-page-title">
+                  {editingCommand ? label('commands.edit_title', 'Edit command') : label('commands.create_title', 'New command')}
                 </h3>
-                <p className="mt-1.5 text-body text-[var(--text-secondary)]">
+                <p className="mt-1 text-body text-[var(--text-secondary)]">
                   {label('commands.form_desc', 'Define the phrases Hermes should recognize and the actions to run.')}
                 </p>
               </div>
@@ -334,9 +321,9 @@ export const Commands = () => {
               </button>
             </div>
 
-            <div className="custom-scrollbar overflow-y-auto p-6">
-              <div className="mb-5">
-                <label className="eyebrow mb-2 block text-[var(--text-secondary)]">
+            <div className="custom-scrollbar overflow-y-auto p-5">
+              <div className="mb-4">
+                <label className="ds-label mb-2 block">
                   {label('commands.name', 'Name')}
                 </label>
                 <input
@@ -348,13 +335,13 @@ export const Commands = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[0.85fr_1.15fr]">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[0.85fr_1.15fr]">
                 <section className="surface-raised p-4">
                   <div className="mb-3 flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
-                    <label className="eyebrow text-[var(--text-secondary)]">
-                      IF trigger phrases
+                    <label className="ds-label">
+                      If trigger phrases
                     </label>
-                    <span className="font-mono text-[10px] font-bold text-[var(--text-muted)]">VOC</span>
+                    <span className="text-caption text-[var(--text-muted)]">Voice</span>
                   </div>
                   <input
                     type="text"
@@ -363,19 +350,19 @@ export const Commands = () => {
                     className="field"
                     placeholder={label('commands.triggers_placeholder', 'open code, start editor')}
                   />
-                  <p className="mt-3 text-xs font-medium text-[var(--text-tertiary)]">
+                  <p className="mt-2 text-caption text-[var(--text-tertiary)]">
                     {label('commands.triggers_hint', 'Separate phrases with commas.')}
                   </p>
                 </section>
 
                 <section className="surface-raised p-4">
                   <div className="mb-3 flex items-center justify-between gap-4 border-b border-[var(--border-subtle)] pb-3">
-                    <label className="eyebrow text-[var(--text-secondary)]">
-                      THEN action chain
+                    <label className="ds-label">
+                      Then action chain
                     </label>
                     <button
                       onClick={addAction}
-                      className="btn-base py-1 px-2.5 text-xs"
+                      className="btn-base py-1.5 px-3 text-[14px]"
                     >
                       <Plus size={14} /> {label('commands.add_action', 'Add Action')}
                     </button>
@@ -387,7 +374,7 @@ export const Commands = () => {
                         key={index}
                         className="relative grid grid-cols-1 gap-3 surface-inset p-3 md:grid-cols-[180px_1fr_auto]"
                       >
-                        <span className="absolute -left-9 top-3 flex h-7 w-7 items-center justify-center surface-base text-[10px] text-[var(--text-secondary)]">
+                        <span className="absolute -left-9 top-3 flex h-7 w-7 items-center justify-center surface-base text-caption text-[var(--text-secondary)]">
                           {formatStep(index)}
                         </span>
                         <select
@@ -422,7 +409,7 @@ export const Commands = () => {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-[var(--border-default)] bg-[var(--surface-0)] p-6">
+            <div className="flex justify-end gap-3 border-t border-[var(--border-default)] bg-[var(--surface-0)] p-5">
               <button
                 onClick={closeModal}
                 disabled={isSaving}

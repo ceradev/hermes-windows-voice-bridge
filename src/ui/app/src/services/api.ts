@@ -5,6 +5,7 @@ import type {
     CustomCommandPayload,
     HermesConfig,
     HermesConfigUpdate,
+    MessageStats,
     QuickCommand,
     RecentActivity,
     RuntimeStatus,
@@ -21,6 +22,7 @@ export type {
     CustomCommandPayload,
     HermesConfig,
     HermesConfigUpdate,
+    MessageStats,
     QuickCommand,
     RecentActivity,
     RuntimeStatus,
@@ -42,6 +44,8 @@ type PywebviewApi = {
     delete_session?: (sessionId: string) => Promise<void>;
     rename_session?: (sessionId: string, newName: string) => Promise<boolean>;
     get_messages?: (sessionId: string) => Promise<ChatMessage[]>;
+    get_message_stats?: () => Promise<MessageStats>;
+    get_recent_messages?: (limit?: number) => Promise<ChatMessage[]>;
     get_recent_activity?: () => Promise<RecentActivity[]>;
     save_vps_token?: (token: string) => Promise<boolean>;
     get_vps_token?: () => Promise<string>;
@@ -132,6 +136,18 @@ export const api = {
     getMessages: async (sessionId: string): Promise<ChatMessage[]> => {
         const bridge = getPywebviewApi();
         if (bridge?.get_messages) return bridge.get_messages(sessionId);
+        return [];
+    },
+
+    getMessageStats: async (): Promise<MessageStats> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.get_message_stats) return bridge.get_message_stats();
+        return { today: 0, week: 0 };
+    },
+
+    getRecentMessages: async (limit = 5): Promise<ChatMessage[]> => {
+        const bridge = getPywebviewApi();
+        if (bridge?.get_recent_messages) return bridge.get_recent_messages(limit);
         return [];
     },
 

@@ -97,7 +97,21 @@ class FakeWakeword:
         self.transcribe_calls: list[tuple[np.ndarray, bool]] = []
         self.contains_calls: list[tuple[str, list[str]]] = []
 
-    def transcribe(self, audio: np.ndarray, language: str = "es", vad_filter: bool = False) -> str:
+    def normalize_text(self, text: str) -> str:
+        return " ".join(text.lower().split())
+
+    def build_stt_prompt(self, phrases: list[str]) -> str:
+        return ", ".join(phrases)
+
+    def transcribe(
+        self,
+        audio: np.ndarray,
+        language: str = "es",
+        *,
+        vad_filter: bool = False,
+        beam_size: int = 1,
+        initial_prompt: str | None = None,
+    ) -> str:
         self.transcribe_calls.append((audio, vad_filter))
         if self.transcripts:
             return self.transcripts.pop(0)
@@ -106,6 +120,14 @@ class FakeWakeword:
     def contains_wake_phrase(self, text: str, phrases: list[str]) -> bool:
         self.contains_calls.append((text, phrases))
         return any(phrase in text.lower() for phrase in phrases)
+
+    def split_wake_and_command(self, text: str, phrases: list[str], **kwargs: Any) -> tuple[bool, str]:
+        normalized = self.normalize_text(text)
+        for phrase in sorted(phrases, key=lambda p: len(p.split()), reverse=True):
+            needle = phrase.lower()
+            if normalized.startswith(needle):
+                return True, normalized[len(needle) :].strip()
+        return False, ""
 
 
 class FakeStream:
@@ -190,7 +212,7 @@ def test_wake_detection_does_not_trigger_on_silence_or_non_wake_noise() -> None:
     silence = np.zeros((blocksize, 1), dtype=np.float32)
     noise = np.ones((blocksize, 1), dtype=np.float32) * 0.02
 
-    for blocks, expected_transcribes in (([silence] * 8, 0), ([noise] * 8, 2)):
+    for blocks, expected_transcribes in (([silence] * 8, 0), ([noise] * 4, 1)):
         wakeword = FakeWakeword(transcripts=["ruido sin frase"])
         handled: list[bool] = []
         loop_ref: dict[str, VoiceLoop] = {}
@@ -203,8 +225,12 @@ def test_wake_detection_does_not_trigger_on_silence_or_non_wake_noise() -> None:
             config_values={
                 "block_seconds": 0.01,
                 "wake_window_seconds": 0.03,
+                "wake_min_speech_seconds": 0.02,
+                "wake_hangover_seconds": 0.01,
+                "wake_speech_ratio_min": 0.4,
                 "wake_energy": 0.008,
                 "wake_cooldown_seconds": 0.0,
+                "stt_beam_size": 3,
                 "wake_phrases": ["hermes"],
                 "hotkey": "",
                 "visual_hotkey": "",
@@ -230,20 +256,24 @@ def test_wake_detection_does_not_trigger_on_silence_or_non_wake_noise() -> None:
 def test_wake_phrase_detection_dispatches_voice_command_once() -> None:
     blocksize = 160
     noise = np.ones((blocksize, 1), dtype=np.float32) * 0.02
-    wakeword = FakeWakeword(transcripts=["oye hermes"])
+    wakeword = FakeWakeword(transcripts=["hermes"])
     handled_sources: list[str] = []
     loop_ref: dict[str, VoiceLoop] = {}
 
     def stop_loop() -> None:
         loop_ref["loop"]._running = False
 
-    stream = FakeStream([noise] * 3, on_exhaust=stop_loop)
+    stream = FakeStream([noise] * 4, on_exhaust=stop_loop)
     loop = build_voice_loop(
         config_values={
             "block_seconds": 0.01,
             "wake_window_seconds": 0.03,
+            "wake_min_speech_seconds": 0.02,
+            "wake_hangover_seconds": 0.01,
+            "wake_speech_ratio_min": 0.4,
             "wake_energy": 0.008,
             "wake_cooldown_seconds": 0.0,
+            "stt_beam_size": 3,
             "wake_phrases": ["hermes"],
             "hotkey": "",
             "visual_hotkey": "",

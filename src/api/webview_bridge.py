@@ -317,6 +317,12 @@ class WebviewBridge:
         # For now, return local history. If we wanted, we could sync remote history here.
         return self._session_manager.get_messages(session_id)
 
+    def get_message_stats(self) -> dict[str, int]:
+        return self._session_manager.get_message_stats()
+
+    def get_recent_messages(self, limit: int = 5) -> list[dict[str, Any]]:
+        return self._session_manager.get_recent_messages(limit)
+
     def get_recent_activity(self) -> list[ActivityEntry]:
         return list(self._recent_activity)
 
@@ -400,8 +406,15 @@ class WebviewBridge:
 
         try:
             data = self._hermes.send_message(remote_id, outbound_text, source, image_base64=image_base64)
-            response_text = data.get("response", "")
-            speak = data.get("speak", False)
+            response_text = str(data.get("response", "") or "").strip()
+            if not response_text and data.get("error"):
+                raise RuntimeError(str(data["error"]))
+            if not response_text:
+                raise RuntimeError(
+                    "Hermes no devolvió texto. Añade api_token en Settings (puerto 8642); "
+                    "el webhook_secret no sirve como token de API."
+                )
+            speak = data.get("speak", bool(response_text))
             latency = data.get("latencyMs", 0)
 
             self._app_state.patch_runtime(connection_status="connected", listening_state="idle")

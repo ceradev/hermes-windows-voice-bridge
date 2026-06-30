@@ -273,6 +273,44 @@ class SessionManager:
         conn.close()
         return [dict(row) for row in messages]
 
+    def get_recent_messages(self, limit: int = 5) -> List[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit), 50))
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        messages = cursor.execute(
+            '''
+            SELECT * FROM messages
+            ORDER BY datetime(created_at) DESC, rowid DESC
+            LIMIT ?
+            ''',
+            (safe_limit,),
+        ).fetchall()
+        conn.close()
+        return [dict(row) for row in messages]
+
+    def get_message_stats(self) -> Dict[str, int]:
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        today_row = cursor.execute(
+            '''
+            SELECT COUNT(*) AS c FROM messages
+            WHERE role = 'user'
+              AND date(created_at) = date('now', 'localtime')
+            '''
+        ).fetchone()
+        week_row = cursor.execute(
+            '''
+            SELECT COUNT(*) AS c FROM messages
+            WHERE role = 'user'
+              AND datetime(created_at) >= datetime('now', 'localtime', '-7 days')
+            '''
+        ).fetchone()
+        conn.close()
+        return {
+            "today": int(today_row["c"]) if today_row else 0,
+            "week": int(week_row["c"]) if week_row else 0,
+        }
+
     # Token management via Keyring
     def save_vps_token(self, username: str, token: str):
         keyring.set_password(self.SERVICE_NAME, username, token)

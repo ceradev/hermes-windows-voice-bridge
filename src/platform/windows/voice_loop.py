@@ -1,5 +1,4 @@
 import threading
-import threading
 import time
 import numpy as np
 
@@ -102,12 +101,20 @@ class VoiceLoop:
         block_sec = self.config.get("block_seconds", 0.25)
         blocksize = max(1, int(sample_rate * block_sec))
 
-        wake_rms = self.config.get("wake_energy", 0.008)
-        silence_rms = self.config.get("silence_rms", 0.025)
-        wake_window_sec = self.config.get("wake_window_seconds", 2.0)
+        wake_rms = self.config.get("wake_energy", 0.007)
+        silence_rms = self.config.get("silence_rms", 0.015)
+        wake_window_sec = float(self.config.get("wake_window_seconds", 1.25))
+        wake_hangover_sec = float(self.config.get("wake_hangover_seconds", 0.35))
+        wake_min_speech_sec = float(self.config.get("wake_min_speech_seconds", 0.45))
+        wake_speech_ratio_min = float(self.config.get("wake_speech_ratio_min", 0.55))
         wake_frames_max = max(1, int(wake_window_sec / block_sec))
+        hangover_frames = max(1, int(wake_hangover_sec / block_sec))
+        min_speech_frames = max(1, int(wake_min_speech_sec / block_sec))
 
-        wake_buffer = []
+        wake_buffer: list[np.ndarray] = []
+        speech_frames = 0
+        silence_after_speech = 0
+        stt_beam_wake = 1
         last_device_signature = None
 
         # Start shortcut listener if configured
@@ -145,18 +152,24 @@ class VoiceLoop:
                         if self._restart_stream:
                             self._restart_stream = False
                             wake_buffer.clear()
+                            speech_frames = 0
+                            silence_after_speech = 0
                             break
 
                         # Pause condition
                         if self.is_paused:
                             time.sleep(0.5)
                             wake_buffer.clear()
+                            speech_frames = 0
+                            silence_after_speech = 0
                             continue
 
                         # Wait if TTS is currently speaking
                         if self.tts.is_speaking:
                             time.sleep(0.1)
                             wake_buffer.clear()
+                            speech_frames = 0
+                            silence_after_speech = 0
                             continue
 
                         # Auto-listen continuation
@@ -164,12 +177,16 @@ class VoiceLoop:
                             time.sleep(0.3) # Give user a tiny breath window after TTS stops
                             auto_listen = self._handle_command(stream, blocksize, silence_rms, source="auto")
                             wake_buffer.clear()
+                            speech_frames = 0
+                            silence_after_speech = 0
                             continue
 
                         requested_source = self._consume_listen_request()
                         if requested_source:
                             auto_listen = self._handle_command(stream, blocksize, silence_rms, source=requested_source)
                             wake_buffer.clear()
+                            speech_frames = 0
+                            silence_after_speech = 0
                             continue
 
                         # 1. Check hotkey first
@@ -177,6 +194,8 @@ class VoiceLoop:
                             self.shortcut_manager.clear_trigger()
                             auto_listen = self._handle_command(stream, blocksize, silence_rms, source="hotkey")
                             wake_buffer.clear()
+                            speech_frames = 0
+                            silence_after_speech = 0
                             continue
 
                         # 1.b Check visual hotkey
@@ -184,6 +203,8 @@ class VoiceLoop:
                             self.shortcut_manager.clear_visual_trigger()
                             auto_listen = self._handle_command(stream, blocksize, silence_rms, source="vision")
                             wake_buffer.clear()
+                            speech_frames = 0
+                            silence_after_speech = 0
                             continue
 
                         # 2. Process audio for wake word
@@ -199,32 +220,63 @@ class VoiceLoop:
 
                             if level > wake_rms:
                                 wake_buffer.append(audio_data)
+                                speech_frames += 1
+                                silence_after_speech = 0
                                 if len(wake_buffer) > wake_frames_max:
                                     wake_buffer.pop(0)
-
-                                now = time.time()
-                                cooldown = self.config.get("wake_cooldown_seconds", 1.0)
-                                if now - self._last_wake_attempt < cooldown:
-                                    continue
-
-                                # Only run full STT once the wake window is full.
-                                # VAD is enabled here to avoid transcribing pure noise.
-                                if len(wake_buffer) >= wake_frames_max:
-                                    combined = np.concatenate(wake_buffer)
-                                    text = self.wakeword.transcribe(
-                                        combined,
-                                        language=self.config.get("stt_language", "es"),
-                                        vad_filter=True,
-                                    )
-                                    self._last_wake_attempt = now
-                                    wake_buffer.clear()
-
-                                    phrases = self.config.get("wake_phrases", [])
-                                    if text and self.wakeword.contains_wake_phrase(text, phrases):
-                                        print(f"Wake phrase detected! Transcription: {text}")
-                                        auto_listen = self._handle_command(stream, blocksize, silence_rms, source="voice")
+                            elif wake_buffer:
+                                wake_buffer.append(audio_data)
+                                silence_after_speech += 1
+                                if len(wake_buffer) > wake_frames_max:
+                                    wake_buffer.pop(0)
                             else:
+                                speech_frames = 0
+                                silence_after_speech = 0
+
+                            if wake_buffer and speech_frames >= min_speech_frames:
+                                window_full = len(wake_buffer) >= wake_frames_max
+                                utterance_done = silence_after_speech >= hangover_frames
+                                speech_ratio = speech_frames / max(len(wake_buffer), 1)
+                                if (window_full or utterance_done) and speech_ratio >= wake_speech_ratio_min:
+                                    now = time.time()
+                                    cooldown = float(self.config.get("wake_cooldown_seconds", 1.2))
+                                    if now - self._last_wake_attempt >= cooldown:
+                                        combined = np.concatenate(wake_buffer)
+                                        avg_level = self.audio.get_rms(combined)
+                                        if avg_level < wake_rms * 1.1:
+                                            wake_buffer.clear()
+                                            speech_frames = 0
+                                            silence_after_speech = 0
+                                            continue
+
+                                        text = self.wakeword.transcribe(
+                                            combined,
+                                            language=self.config.get("stt_language", "es"),
+                                            vad_filter=True,
+                                            beam_size=stt_beam_wake,
+                                        )
+                                        self._last_wake_attempt = now
+                                        wake_buffer.clear()
+                                        speech_frames = 0
+                                        silence_after_speech = 0
+
+                                        if text:
+                                            print(f"[WAKE] STT sample: '{text}'")
+                                        phrases = self.config.get("wake_phrases", [])
+                                        detected, command_tail = self.wakeword.split_wake_and_command(text, phrases)
+                                        if detected:
+                                            print(f"Wake phrase detected! Transcription: {text}")
+                                            auto_listen = self._handle_command(
+                                                stream,
+                                                blocksize,
+                                                silence_rms,
+                                                source="voice",
+                                                prefilled_text=command_tail or None,
+                                            )
+                            elif silence_after_speech > hangover_frames * 3:
                                 wake_buffer.clear()
+                                speech_frames = 0
+                                silence_after_speech = 0
                         except Exception as e:
                             print(f"Audio read error: {e}")
                             break
@@ -252,16 +304,18 @@ class VoiceLoop:
         with self._activation_lock:
             return self._cancel_flag
 
-    def _handle_command(self, stream, blocksize, silence_rms, source="voice"):
+    def _handle_command(self, stream, blocksize, silence_rms, source="voice", prefilled_text: str | None = None):
         if not self._begin_listening(source):
             print(f"[MIC] Ignoring {source} activation because listening is already active.")
             return False
         try:
-            return self._handle_command_unlocked(stream, blocksize, silence_rms, source=source)
+            return self._handle_command_unlocked(
+                stream, blocksize, silence_rms, source=source, prefilled_text=prefilled_text
+            )
         finally:
             self._finish_listening()
 
-    def _handle_command_unlocked(self, stream, blocksize, silence_rms, source="voice"):
+    def _handle_command_unlocked(self, stream, blocksize, silence_rms, source="voice", prefilled_text: str | None = None):
         image_base64 = None
         if source == "vision":
             print("[VISION] 📸 Tomando captura de pantalla...")
@@ -281,7 +335,15 @@ class VoiceLoop:
         if self.tray:
             self.tray.set_mic_active(True)
 
-        # Play elegant earcon instead of harsh TTS beep
+        stt_prompt = self.wakeword.build_stt_prompt(self.config.get("wake_phrases", []))
+        stt_beam = max(1, int(self.config.get("stt_beam_size", 5)))
+
+        prefilled = (prefilled_text or "").strip()
+        if prefilled:
+            print(f"[STT] ✅ Comando en la misma frase: '{prefilled}'")
+            text = self.wakeword.normalize_text(prefilled)
+            return self._process_transcribed_text(text, image_base64=image_base64, source=source)
+
         self.audio.play_earcon("wake")
 
         def emit_level(level):
@@ -320,63 +382,17 @@ class VoiceLoop:
             if hasattr(self.bridge, "set_runtime_listening_state"):
                 self.bridge.set_runtime_listening_state("thinking", "Transcribing your command...")
             # Apagamos el filtro VAD porque a veces recorta las voces bajas
-            text = self.wakeword.transcribe(command_audio, language=self.config.get("stt_language", "es"), vad_filter=False)
+            text = self.wakeword.transcribe(
+                command_audio,
+                language=self.config.get("stt_language", "es"),
+                vad_filter=False,
+                beam_size=stt_beam,
+                initial_prompt=stt_prompt,
+            )
 
             if text:
                 print(f"[STT] ✅ Texto reconocido: '{text}'")
-                if hasattr(self.bridge, "set_runtime_overlay_text"):
-                    self.bridge.set_runtime_overlay_text(text, "")
-                if self.tray:
-                    self.tray.set_mic_active(False)
-
-                # Check for local commands first
-                from src.platform.windows.local_commands import process_local_command
-                if process_local_command(text):
-                    print(f"[LOCAL] 🖥️ Comando local ejecutado.")
-                    self.audio.play_earcon("done")
-                    self.bridge.log_local_action(text, "Acción de sistema ejecutada localmente.")
-                    if hasattr(self.bridge, "set_runtime_overlay_text"):
-                        self.bridge.set_runtime_overlay_text(text, "Acción de sistema ejecutada localmente.")
-                    self.overlay.show_result(text, "Acción de sistema ejecutada localmente.")
-                    self.overlay.hide()
-                    if hasattr(self.bridge, "set_runtime_listening_state"):
-                        self.bridge.set_runtime_listening_state("idle")
-                    if self.tray:
-                        self.tray.set_mic_active(False)
-                    return True
-
-                # Send message via bridge to ensure UI reacts and DB updates
-                self.overlay.show("thinking", text)
-                if hasattr(self.bridge, "set_runtime_listening_state"):
-                    self.bridge.set_runtime_listening_state("thinking", text)
-                res = self.bridge.send_message(text, image_base64=image_base64)
-
-                response_text = res.get("response", "")
-                if response_text:
-                    if hasattr(self.bridge, "set_runtime_overlay_text"):
-                        self.bridge.set_runtime_overlay_text(text, response_text)
-                    self.overlay.show_result(text, response_text)
-                    if hasattr(self.bridge, "set_runtime_listening_state"):
-                        self.bridge.set_runtime_listening_state("speaking", response_text)
-                    while self._running and getattr(self.tts, "is_speaking", False):
-                        time.sleep(0.1)
-                    self.overlay.hide()
-                    if hasattr(self.bridge, "set_runtime_listening_state"):
-                        self.bridge.set_runtime_listening_state("idle")
-                else:
-                    self.overlay.hide()
-                    if hasattr(self.bridge, "set_runtime_listening_state"):
-                        self.bridge.set_runtime_listening_state("idle")
-
-                if res.get("success", False):
-                    self.audio.play_earcon("done")
-                else:
-                    self.audio.play_earcon("error")
-
-                print(f"[API] 📡 Respuesta de Hermes: {res.get('success', False)}")
-                if self.tray:
-                    self.tray.set_mic_active(False)
-                return res.get("success", False)
+                return self._process_transcribed_text(text, image_base64=image_base64, source=source)
             else:
                 print("[STT] ❌ El audio contenía ruido pero no se reconoció ningún texto claro.")
                 self.overlay.hide()
@@ -393,3 +409,56 @@ class VoiceLoop:
             if self.tray:
                 self.tray.set_mic_active(False)
             return False
+
+    def _process_transcribed_text(self, text: str, *, image_base64, source: str) -> bool:
+        if hasattr(self.bridge, "set_runtime_overlay_text"):
+            self.bridge.set_runtime_overlay_text(text, "")
+        if self.tray:
+            self.tray.set_mic_active(False)
+
+        from src.platform.windows.local_commands import process_local_command
+        if process_local_command(text):
+            print(f"[LOCAL] 🖥️ Comando local ejecutado.")
+            self.audio.play_earcon("done")
+            self.bridge.log_local_action(text, "Acción de sistema ejecutada localmente.")
+            if hasattr(self.bridge, "set_runtime_overlay_text"):
+                self.bridge.set_runtime_overlay_text(text, "Acción de sistema ejecutada localmente.")
+            self.overlay.show_result(text, "Acción de sistema ejecutada localmente.")
+            self.overlay.hide()
+            if hasattr(self.bridge, "set_runtime_listening_state"):
+                self.bridge.set_runtime_listening_state("idle")
+            if self.tray:
+                self.tray.set_mic_active(False)
+            return True
+
+        self.overlay.show("thinking", text)
+        if hasattr(self.bridge, "set_runtime_listening_state"):
+            self.bridge.set_runtime_listening_state("thinking", text)
+        res = self.bridge.send_message(text, image_base64=image_base64)
+
+        response_text = res.get("response", "")
+        if response_text:
+            if hasattr(self.bridge, "set_runtime_overlay_text"):
+                self.bridge.set_runtime_overlay_text(text, response_text)
+            self.overlay.show_result(text, response_text)
+            if hasattr(self.bridge, "set_runtime_listening_state"):
+                self.bridge.set_runtime_listening_state("speaking", response_text)
+            while self._running and getattr(self.tts, "is_speaking", False):
+                time.sleep(0.1)
+            self.overlay.hide()
+            if hasattr(self.bridge, "set_runtime_listening_state"):
+                self.bridge.set_runtime_listening_state("idle")
+        else:
+            self.overlay.hide()
+            if hasattr(self.bridge, "set_runtime_listening_state"):
+                self.bridge.set_runtime_listening_state("idle")
+
+        if res.get("success", False):
+            self.audio.play_earcon("done")
+        else:
+            self.audio.play_earcon("error")
+
+        print(f"[API] 📡 Respuesta de Hermes: {res.get('success', False)}")
+        if self.tray:
+            self.tray.set_mic_active(False)
+        return res.get("success", False)

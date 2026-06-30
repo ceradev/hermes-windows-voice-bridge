@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { MessageSquare, Plus, Trash2, Copy, Clock, Globe, Volume2, Download, Activity } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
-import { SectionHeader } from '../components/Layout/PageHeader';
+import { PageHeader } from '../components/Layout/PageHeader';
 import type { ChatMessage, RecentActivity, SessionRecord } from '../types/webview';
 
 const formatTimestamp = (timestamp: string) => {
@@ -89,24 +89,23 @@ export const Chat = () => {
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col pb-6">
-      <SectionHeader
-        eyebrow="COMMUNICATION"
-        title="Chat & Activity"
-        description="Review your conversations and recent system events."
+    <div className="flex h-full min-h-0 flex-col pb-4">
+      <PageHeader
+        title="Chat & activity"
+        description="Conversations and recent system events."
         action={
           <button
             onClick={() => void handleCreateSession()}
-            className="btn-primary font-bold shadow-[0_0_15px_rgba(255,255,255,0.1)] text-xs tracking-wider uppercase px-5 py-2.5"
+            className="btn-primary px-4 py-2 text-[15px] font-semibold"
           >
-            <Plus size={16} /> New Session
+            <Plus size={18} /> New session
           </button>
         }
       />
 
-      <div className="flex gap-6 flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1 gap-4">
         {/* Left Sidebar */}
-        <div className="w-[300px] flex flex-col gap-4">
+        <div className="flex w-[280px] flex-col gap-3">
           <div className="surface-base flex flex-col overflow-hidden h-full">
             <div className="p-4 border-b border-[var(--border-subtle)]">
               <button 
@@ -114,12 +113,12 @@ export const Chat = () => {
                 className={`w-full p-3 rounded-[var(--radius-md)] flex items-center gap-3 transition-colors ${viewMode === 'activity' ? 'bg-[var(--surface-3)] text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'}`}
               >
                 <Activity size={16} />
-                <span className="font-semibold text-sm">Activity Log</span>
+                <span className="text-[15px] font-medium">Activity log</span>
               </button>
             </div>
             
             <div className="p-4 border-b border-[var(--border-subtle)] bg-[var(--surface-0)]">
-              <h3 className="eyebrow text-[var(--text-tertiary)]">Sessions</h3>
+              <p className="ds-label text-[var(--text-tertiary)]">Sessions</p>
             </div>
             
             <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
@@ -148,9 +147,8 @@ export const Chat = () => {
         <div className="flex-1 surface-base flex flex-col overflow-hidden relative">
           {viewMode === 'activity' ? (
             <div className="flex flex-col h-full">
-              <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-0)]">
-                <h2 className="text-heading">Recent System Activity</h2>
-                <span className="eyebrow bg-[var(--surface-2)] px-2 py-1 rounded">{activity.length} Events</span>
+              <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-end bg-[var(--surface-0)]">
+                <span className="ds-badge">{activity.length} events</span>
               </div>
               <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {activity.length === 0 ? (
@@ -160,13 +158,13 @@ export const Chat = () => {
                     {activity.map((item, index) => {
                       const isSuccess = item.status === 'success';
                       return (
-                        <div key={index} className="flex gap-4 p-4 hover:bg-[var(--surface-2)] transition-colors text-sm">
-                          <time className="font-mono text-xs text-[var(--text-tertiary)] w-24 shrink-0 mt-0.5">{formatTimestamp(item.timestamp)}</time>
-                          <div className={`shrink-0 w-10 text-center font-mono text-[10px] font-bold tracking-wider py-1 rounded ${isSuccess ? 'bg-[var(--state-ready-glow)] text-[var(--state-ready)]' : 'bg-[var(--state-error-glow)] text-[var(--state-error)]'}`}>
+                        <div key={index} className="flex gap-3 p-4 hover:bg-[var(--surface-2)] transition-colors text-body">
+                          <time className="font-mono text-caption text-[var(--text-tertiary)] w-24 shrink-0 mt-0.5">{formatTimestamp(item.timestamp)}</time>
+                          <div className={`shrink-0 w-10 text-center font-mono text-caption font-semibold py-1 rounded ${isSuccess ? 'bg-[var(--state-ready-glow)] text-[var(--state-ready)]' : 'bg-[var(--state-error-glow)] text-[var(--state-error)]'}`}>
                             {isSuccess ? 'OK' : 'ERR'}
                           </div>
                           <div className="flex-1">
-                            <span className="eyebrow text-[var(--text-tertiary)] mr-2">{item.type === 'voice' ? 'VOICE' : 'CMD'}</span>
+                            <span className="text-caption text-[var(--text-tertiary)] mr-2">{item.type === 'voice' ? 'Voice' : 'Cmd'}</span>
                             <span className="text-[var(--text-primary)]">{item.text}</span>
                           </div>
                         </div>
@@ -180,7 +178,7 @@ export const Chat = () => {
             <>
               <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-0)]">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-heading truncate">{activeSession?.name || 'Session'}</h2>
+                  <h2 className="ds-card-title truncate">{activeSession?.name || 'Session'}</h2>
                   {activeSession?.remote_session_id && (
                     <div className="flex items-center gap-1.5 bg-[var(--surface-2)] px-2 py-1 rounded text-xs text-[var(--text-secondary)]">
                       <Globe size={12} />
@@ -195,22 +193,22 @@ export const Chat = () => {
                 )}
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                 {messages.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-[var(--text-tertiary)] text-sm">
+                  <div className="h-full flex items-center justify-center text-[var(--text-tertiary)] text-body">
                     No messages in this session.
                   </div>
                 ) : (
                   messages.map((m) => (
-                    <div key={m.id} className={`flex flex-col animate-in slide-in-from-bottom-2 duration-300 ${m.role === 'user' ? 'items-end' : 'items-start'} group`}>
-                      <div className={`max-w-[80%] rounded-2xl px-5 py-3.5 ${m.role === 'user' ? 'bg-[var(--text-primary)] text-[var(--bg-base)] rounded-br-sm' : 'bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] rounded-bl-sm'}`}>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                    <div key={m.id} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'} group`}>
+                      <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${m.role === 'user' ? 'bg-[var(--text-primary)] text-[var(--bg-base)] rounded-br-sm' : 'bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] rounded-bl-sm'}`}>
+                        <p className="text-body leading-relaxed whitespace-pre-wrap">{m.content}</p>
                       </div>
                       
                       <div className={`flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity px-1 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
                         {m.role === 'hermes' && m.latency_ms && m.latency_ms > 0 && (
-                          <div className="flex items-center gap-1 text-[10px] text-[var(--text-tertiary)] bg-[var(--surface-0)] px-2 py-1 rounded border border-[var(--border-subtle)]">
-                            <Clock size={10} />
+                          <div className="flex items-center gap-1 text-caption text-[var(--text-tertiary)] bg-[var(--surface-0)] px-2 py-1 rounded border border-[var(--border-subtle)]">
+                            <Clock size={12} />
                             <span>{m.latency_ms}ms</span>
                           </div>
                         )}

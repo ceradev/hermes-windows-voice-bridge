@@ -141,7 +141,7 @@ def main():
 
     hermes = HermesClient(config)
     audio = AudioService()
-    wakeword = WakePhraseManager(model_size=config.get("stt_model", "base"))
+    wakeword = WakePhraseManager(model_size=config.get("stt_model", "small"))
     tts = TTSService(
         mode=config.get("feedback_mode", "both"),
         voice_name=config.get("feedback_voice", ""),

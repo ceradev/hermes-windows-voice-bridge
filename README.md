@@ -1,8 +1,8 @@
 # Hermes Windows Voice Bridge
 
-> **Plugin oficial de voz nativa para Hermes Agent en Windows.**
+> Cliente nativo de Windows para [Hermes Agent](https://github.com/nousresearch/hermes-agent).
 >
-> Cliente Windows de escritorio que permite interactuar con Hermes mediante voz: wake word, hotkey, transcripción local, envío al webhook de Hermes, y lectura de respuestas con TTS.
+> Asistente de voz de escritorio: wake phrase, hotkey global, STT local, envío a Hermes en tu VPS y respuestas por TTS.
 
 ---
 
@@ -12,14 +12,14 @@
 - [Arquitectura](#arquitectura)
 - [Integración con Hermes](#integración-con-hermes)
 - [Requisitos](#requisitos)
-- [Instalación](#instalación)
+- [Instalación para usuarios](#instalación-para-usuarios)
+- [Desarrollo](#desarrollo)
 - [Configuración](#configuración)
 - [Uso](#uso)
-- [Flujo de Datos](#flujo-de-datos)
-- [Sesión Persistente](#sesión-persistente)
-- [Empaquetado y Distribución](#empaquetado-y-distribución)
-- [Desarrollo y Tests](#desarrollo-y-tests)
-- [Estructura del Proyecto](#estructura-del-proyecto)
+- [Flujo de datos](#flujo-de-datos)
+- [Build e instalador](#build-e-instalador)
+- [Tests](#tests)
+- [Estructura del proyecto](#estructura-del-proyecto)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
 
@@ -27,152 +27,149 @@
 
 ## Resumen
 
-Hermes Windows Voice Bridge es un cliente nativo de Windows para [Hermes Agent](https://github.com/nousresearch/hermes-agent). Transforma tu PC en un asistente de voz local que:
+Hermes Windows Voice Bridge convierte tu PC en un asistente de voz que funciona en segundo plano:
 
-1. **Escucha** continuamente una wake phrase (ej: "Hermes", "Oye Hermes")
-2. **Activa** por hotkey configurable (default: `Ctrl+Shift+H`)
-3. **Graba** tu comando de voz hasta detectar silencio
-4. **Transcribe** localmente con [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) (modelos Whisper de OpenAI, ejecutados on-device)
-5. **Envía** el texto al webhook de Hermes en tu VPS
-6. **Recibe** la respuesta de Hermes
-7. **Lee en voz alta** la respuesta con TTS (pyttsx3 / SAPI5 en Windows)
+1. **Escucha** wake phrases ("Hermes", "Oye Hermes", "Hey Hermes")
+2. **Activa** con hotkey global (por defecto `Ctrl+Shift+H`)
+3. **Graba** hasta detectar silencio
+4. **Transcribe** localmente con [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
+5. **Envía** el texto a la API de Hermes en tu VPS
+6. **Guarda** sesiones y mensajes en SQLite local
+7. **Lee** la respuesta con TTS (pyttsx3 / SAPI5 o edge-tts)
 
-Todo ocurre sin abrir Telegram ni tocar el móvil. Una experiencia desktop-native, silenciosa y persistente.
+La experiencia principal es **nativa de Windows**: icono en bandeja, overlay flotante y panel de configuración React embebido con pywebview.
 
-### Características principales
+### Características
 
 | Característica | Descripción |
 |---------------|-------------|
-| 🎙️ Wake Word | Detección local por STT en ventanas cortas ("Hermes", "Oye Hermes", "Hey Hermes") |
-| ⌨️ Hotkey | Atajo global configurable con captura visual moderna |
-| 🧠 STT Local | `faster-whisper` — no envía audio al servidor, solo texto |
-| 🔊 TTS Local | pyttsx3 + SAPI5 — respuestas leídas en voz alta |
-| 🔄 Sesión Persistente | Autenticación que sobrevive reinicios de app y de Windows |
-| 🎯 Tray Native | Icono en bandeja del sistema con menú contextual |
-| 🖥️ Desktop App | Aplicación de configuración con UX moderna (tkinter themed) |
-| 📡 API Local | HTTP API en `localhost:8765` para control externo |
-| 🎨 Overlay | Feedback visual compacto en pantalla (listening, transcribing, responding) |
-| 📦 Autostart | Inicio automático con Windows vía Scheduled Task + Startup shortcut |
-| 🛠️ Extensible | Arquitectura modular: core, services, platform, ui, storage, api |
+| Wake phrase | Detección local por STT en ventanas cortas |
+| Hotkey global | Atajo configurable con captura visual |
+| STT local | faster-whisper — el audio no sale del PC |
+| TTS local | Respuestas leídas en voz alta |
+| Sesiones SQLite | Historial local + `remote_session_id` para VPS |
+| Tray nativo | Menú contextual con micrófonos, pausa y comandos rápidos |
+| Dashboard React | Home, Chat, Configure, Settings, Commands |
+| Overlay | Pill flotante con estados listening / thinking / speaking |
+| Autostart | Opcional al instalar o desde Settings |
+| Comandos custom | Abrir apps, búsqueda web, volumen, TTS, hotkeys |
 
 ---
 
 ## Arquitectura
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              WINDOWS DESKTOP                                 │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    │
-│  │  Tray Icon  │    │ Desktop App │    │   Overlay   │    │   Hotkey    │    │
-│  │  (pystray)  │    │  (tkinter)  │    │  (tkinter)  │    │  (ctypes)   │    │
-│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘    └──────┬──────┘    │
-│         │                  │                  │                  │          │
-│         └──────────────────┴──────────────────┴──────────────────┘          │
-│                                    │                                         │
-│                         ┌──────────▼──────────┐                              │
-│                         │   EVENT BUS         │                              │
-│                         │   (pub/sub interno) │                              │
-│                         └──────────┬──────────┘                              │
-│                                    │                                         │
-│         ┌──────────────────────────┼──────────────────────────┐             │
-│         │                          │                          │             │
-│  ┌──────▼──────┐          ┌────────▼────────┐        ┌────────▼────────┐  │
-│  │  Core       │          │  Services       │        │  Platform        │  │
-│  │  ─────────  │          │  ─────────────  │        │  ──────────────  │  │
-│  │  ConfigSvc  │◄────────►│  Audio (sd+whisper)      │  Windows        │  │
-│  │  StateMgr   │◄────────►│  WakeWord (STT loop)     │  Notifications  │  │
-│  │  SessionMgr │◄────────►│  Transcription           │  Shortcuts      │  │
-│  │  Logger     │◄────────►│  TTS (pyttsx3)           │  SecureStore    │  │
-│  │  Lifecycle  │          │  Hermes (webhook POST)   │  SingleInstance │  │
-│  └─────────────┘          └──────────────────────────┘        └─────────────────┘  │
-│                                                                         │  │
-│                              ┌──────────────┐                           │  │
-│                              │  Storage     │                           │  │
-│                              │  ───────────  │                           │  │
-│                              │  Session JSON │                           │  │
-│                              │  Secrets      │                           │  │
-│                              │  Runtime State│                           │  │
-│                              │  Cache        │                           │  │
-│                              └──────────────┘                           │  │
-│                                                                         │  │
-└─────────────────────────────────────────────────────────────────────────┘  │
-                                     │                                         │
-                                     │ HTTP POST + HMAC-SHA256                   │
-                                     │                                         │
-                              ┌──────▼──────┐                                  │
-                              │   VPS        │                                  │
-                              │  Hermes      │                                  │
-                              │  Gateway     │                                  │
-                              │  ───────────  │                                  │
-                              │  Webhook     │                                  │
-                              │  Route:voice │                                  │
-                              │  Agent       │                                  │
-                              │  Telegram    │                                  │
-                              └─────────────┘                                  │
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           WINDOWS DESKTOP                               │
+│  ┌────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │
+│  │ Tray       │  │ pywebview   │  │ Overlay     │  │ Hotkeys         │ │
+│  │ (pystray)  │  │ + React UI  │  │ (tkinter)   │  │ (ShortcutMgr)   │ │
+│  └─────┬──────┘  └──────┬──────┘  └──────┬──────┘  └────────┬────────┘ │
+│        │                │                │                   │          │
+│        └────────────────┴────────────────┴───────────────────┘          │
+│                                    │                                     │
+│                         ┌──────────▼──────────┐                          │
+│                         │   WebviewBridge     │                          │
+│                         │   (Python ↔ React)  │                          │
+│                         └──────────┬──────────┘                          │
+│                                    │                                     │
+│         ┌──────────────────────────┼──────────────────────────┐          │
+│         │                          │                          │          │
+│  ┌──────▼──────┐          ┌────────▼────────┐        ┌────────▼────────┐│
+│  │ Core        │          │ Services        │        │ Platform        ││
+│  │ ConfigSvc   │◄────────►│ Audio + Whisper │        │ VoiceLoop       ││
+│  │ AppState    │◄────────►│ WakePhrase      │        │ OverlayService  ││
+│  │ SessionMgr  │◄────────►│ TTS             │        │ Autostart       ││
+│  │ EventBus    │          │ HermesClient    │        │ SecureStore     ││
+│  └──────┬──────┘          └─────────────────┘        └─────────────────┘│
+│         │                                                                │
+│  ┌──────▼──────┐                                                         │
+│  │ SQLite      │  %APPDATA%\HermesVoiceBridge\database.sqlite            │
+│  └─────────────┘                                                         │
+└──────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     │ HTTPS / HTTP + Bearer token
+                                     ▼
+                          ┌─────────────────────┐
+                          │ Hermes API (VPS)    │
+                          │ /api/health         │
+                          │ /api/hermes/message │
+                          │ /api/sessions       │
+                          └─────────────────────┘
 ```
 
 ### Principios de diseño
 
-- **Menos web, más nativo:** No es una web app empaquetada. Es Python nativo con tkinter, ctypes, pystray.
-- **Background utility:** La experiencia principal ocurre via tray, overlays, y atajos. No necesitas abrir ventanas.
-- **Single source of truth:** Un único `AppStateStore` centralizado. No hay estados duplicados.
-- **Event-driven:** Todo flujo de audio → transcripción → webhook → TTS pasa por el event bus.
-- **Seguridad:** Tokens de sesión en archivo separado (`session.secrets`), HMAC-SHA256 en cada POST al webhook.
+- **Entrypoint único:** `src/platform/windows/desktop_app.py`
+- **Single source of truth:** `AppStateStore` centraliza el estado runtime
+- **Background-first:** tray, overlay y hotkeys son la experiencia principal
+- **Persistencia en AppData:** config, DB y logs fuera del directorio de instalación
+- **Seguridad:** tokens vía keyring/DPAPI; SSL verificado en cliente HTTP
 
 ---
 
 ## Integración con Hermes
 
-### Requisitos en el VPS (Hermes Gateway)
+### Requisitos en el VPS
 
-1. **Webhook activo** en el gateway de Hermes
-2. **Ruta `voice`** creada y configurada
-3. **Secret compartido** entre VPS y cliente Windows
+1. Hermes Agent / gateway accesible desde tu PC
+2. API HTTP habilitada (puerto por defecto del despliegue, ej. `8642`)
+3. Token de cliente válido (`api_token`)
 
-### Configurar el webhook en el VPS
+### Configuración en el cliente
 
-```bash
-# En tu VPS donde corre Hermes
-hermes webhook subscribe voice --secret "$(openssl rand -hex 32)"
-```
-
-Esto genera un secreto aleatorio. Guárdalo — lo necesitarás en el cliente Windows.
-
-### Payload enviado al webhook
-
-Cada comando de voz envía un POST a `http://VPS_IP:8644/webhooks/voice`:
+Desde **Settings** en el dashboard o editando `%APPDATA%\HermesVoiceBridge\config.json`:
 
 ```json
 {
-  "text": "hola hermes, ¿qué hora es?",
-  "source": "windows_voice_bridge",
-  "event_type": "voice",
-  "user_id": "cesar"
+  "api_base_url": "http://TU_VPS:8642",
+  "api_token": "tu-token-de-cliente"
 }
 ```
 
-Headers:
+También puedes inyectar el token por entorno antes del primer arranque:
+
+```powershell
+$env:HERMES_API_TOKEN = "tu-token"
+python -B src\platform\windows\desktop_app.py
 ```
-Content-Type: application/json
-X-Webhook-Signature: <hmac-sha256-del-body>
-X-Request-ID: cesar
-```
 
-- **`user_id`** y **`X-Request-ID`**: Si hay sesión persistida, Hermes agrupa todos los mensajes del mismo usuario en el mismo thread. Sin esto, cada comando crearía un chat nuevo.
-- **`X-Webhook-Signature`**: HMAC-SHA256 del body con el shared secret. El gateway de Hermes valida esto para rechazar requests no autorizados.
+### Envío de mensajes
 
-### Respuesta de Hermes (modo sync)
-
-Si `HERMES_WEBHOOK_SYNC=1`, el bridge espera la respuesta HTTP del webhook:
+`HermesClient.send_message()` hace `POST /api/hermes/message` con:
 
 ```json
 {
-  "response": "Son las 3:15 PM. ¿Necesitas algo más?",
-  "final_response": "Son las 3:15 PM. ¿Necesitas algo más?"
+  "sessionId": "uuid-remoto",
+  "message": "texto transcrito o escrito",
+  "source": "voice",
+  "metadata": {
+    "client": "hermes-voice-bridge",
+    "platform": "windows",
+    "appVersion": "1.0.0",
+    "language": "es"
+  }
 }
 ```
 
-El bridge extrae el texto y lo pasa al motor TTS para leerlo en voz alta.
+Respuesta esperada (simplificada):
+
+```json
+{
+  "success": true,
+  "response": "Texto de Hermes",
+  "speak": true,
+  "latencyMs": 820
+}
+```
+
+Si `speak` es verdadero, `TTSService` lee la respuesta en voz alta.
+
+### Sesiones
+
+- **Locales:** SQLite en AppData (lista en Chat)
+- **Remotas:** `remote_session_id` sincroniza con `/api/sessions` del VPS
+- **Auto-titulado:** sesiones genéricas se renombran desde el primer mensaje (ES/EN)
 
 ---
 
@@ -181,440 +178,301 @@ El bridge extrae el texto y lo pasa al motor TTS para leerlo en voz alta.
 ### Sistema
 
 - Windows 10/11 (64-bit)
-- Python 3.11 o superior
-- Micrófono funcional
-- ~500MB espacio libre (para modelos Whisper)
+- Micrófono
+- ~500 MB libres (modelos Whisper)
 
-### Dependencias Python
+### Desarrollo
 
-Instalación automática via `requirements.txt`:
-
-```powershell
-pip install -r requirements.txt
-```
-
-Principales dependencias:
-- `faster-whisper` — STT local (modelos Whisper optimizados)
-- `sounddevice` — Captura de audio del micrófono
-- `numpy` — Procesamiento de audio
-- `pystray` — Icono en bandeja del sistema
-- `Pillow` — Iconos e imágenes para tray
-- `pyttsx3` — TTS local (SAPI5 en Windows)
+- Python 3.11+
+- Node.js 18+ y npm
+- Inno Setup (solo para generar el instalador)
 
 ---
 
-## Instalación
+## Instalación para usuarios
 
-### 1. Clonar o descargar
+**Distribución oficial:** instalador Windows generado con Inno Setup.
+
+1. Ejecuta `HermesVoiceBridge-setup.exe` (o el nombre de salida de `setup.iss`)
+2. Sigue el asistente (escritorio y autostart son opcionales)
+3. Abre la app desde el menú Inicio o la bandeja del sistema
+4. En **Settings**, configura `api_base_url` y `api_token`
+5. En **Configure**, elige micrófono y hotkey
+
+Datos de usuario (config, sesiones, logs) viven en:
+
+```text
+%APPDATA%\HermesVoiceBridge\
+├── config.json
+├── database.sqlite
+└── app.log
+```
+
+---
+
+## Desarrollo
+
+### 1. Clonar e instalar
 
 ```powershell
 git clone https://github.com/ceradev/hermes-windows-voice-bridge.git
 cd hermes-windows-voice-bridge
+python -m pip install -r requirements.txt
+cd src\ui\app
+npm install
+cd ..\..\..
 ```
 
-### 2. Instalar dependencias
+### 2. Arrancar (recomendado)
 
 ```powershell
-pip install -r requirements.txt
+.\scripts\run_desktop_app.ps1
 ```
 
-### 3. Configurar variables de entorno
+Compila la UI y lanza `desktop_app.py`.
 
-Copia el archivo de ejemplo y edítalo:
+### 3. Modo dev UI (hot reload)
 
 ```powershell
-copy state\voice.env.example state\voice.env
-notepad state\voice.env
+# Terminal 1
+cd src\ui\app
+npm run dev
+
+# Terminal 2
+$env:HERMES_UI_DEV = "1"
+python -B src\platform\windows\desktop_app.py
 ```
 
-Contenido mínimo de `state/voice.env`:
-
-```env
-HERMES_WEBHOOK_URL=http://TU_VPS_IP:8644/webhooks/voice
-HERMES_WEBHOOK_SECRET=tu_secreto_del_vps_aqui
-HERMES_HOTKEY=ctrl+shift+h
-HERMES_FEEDBACK_MODE=both
-HERMES_WEBHOOK_SYNC=1
-HERMES_STT_LANGUAGE=es
-```
-
-### 4. Ejecutar
-
-**Opción A: Solo el bridge de voz**
-```powershell
-python .\src\windows_hermes_voice.py
-```
-
-**Opción B: Tray con supervisión (recomendado)**
-```powershell
-.\scripts\run_voice_tray.ps1
-```
-
-**Opción C: Desktop app**
-```powershell
-python -B .\src\windows_hermes_voice_desktop.py
-```
+Documentación detallada de build: [docs/BUILD_NOTES.md](docs/BUILD_NOTES.md)  
+Plan de trabajo: [docs/PLAN.md](docs/PLAN.md)
 
 ---
 
 ## Configuración
 
-### Variables de entorno completas
+Archivo: `%APPDATA%\HermesVoiceBridge\config.json`
 
-| Variable | Default | Descripción |
-|----------|---------|-------------|
-| `HERMES_WEBHOOK_URL` | (requerido) | URL del webhook en tu VPS |
-| `HERMES_WEBHOOK_SECRET` | (requerido) | Secreto compartido para HMAC |
-| `HERMES_WEBHOOK_SYNC` | `1` | Esperar respuesta de Hermes (1=sí, 0=no) |
-| `HERMES_WEBHOOK_TIMEOUT` | `120` | Timeout en segundos para respuesta sync |
-| `HERMES_HOTKEY` | `ctrl+shift+h` | Atajo global para activar escucha |
-| `HERMES_WAKE_PHRASES` | `hermes,oye hermes,hey hermes` | Frases de activación por voz |
-| `HERMES_STT_MODEL` | `base` | Modelo Whisper: tiny/base/small/medium/large |
-| `HERMES_STT_LANGUAGE` | (auto) | Código idioma STT: `es`, `en`, etc. |
-| `HERMES_MIC_DEVICE` | (default) | Índice del micrófono a usar |
-| `HERMES_FEEDBACK_MODE` | `both` | Feedback: `off`, `beep`, `voice`, `both` |
-| `HERMES_FEEDBACK_VOICE` | (default) | Nombre de voz SAPI5 para TTS |
-| `HERMES_PERSIST_SESSION` | `1` | Mantener sesión iniciada entre reinicios |
-| `HERMES_AUTH_REFRESH_URL` | (vacío) | Endpoint HTTP para refresh de tokens |
-| `HERMES_AUTH_TIMEOUT` | `10` | Timeout para llamadas de auth |
+| Clave | Default | Descripción |
+|-------|---------|-------------|
+| `api_base_url` | VPS configurado | URL base de la API Hermes |
+| `api_token` | `""` | Token Bearer / client key |
+| `hotkey` | `ctrl+shift+h` | Atajo global de voz |
+| `wake_phrases` | `["hermes", ...]` | Frases de activación |
+| `stt_model` | `base` | Modelo Whisper: tiny/base/small/… |
+| `stt_language` | `es` | Idioma STT |
+| `mic_device` | `null` | Índice de micrófono sounddevice |
+| `feedback_mode` | `both` | `off`, `beep`, `voice`, `both` |
+| `feedback_voice` | `""` | Voz SAPI5 para TTS |
+| `overlay_enabled` | `true` | Mostrar overlay flotante |
+| `overlay_mode` | `mini` | `mini` o `full` |
+| `autostart` | `true` | Inicio con Windows |
+| `custom_commands` | `[]` | Comandos personalizados |
 
-### Configuración por archivo
-
-Todas las variables también se pueden editar desde la **Desktop App** (pestañas General, Audio, Shortcuts, Hermes, Session).
-
-Los cambios se guardan en `state/voice.env` automáticamente.
+La mayoría de opciones se editan desde **Configure** y **Settings** sin tocar el JSON a mano.
 
 ---
 
 ## Uso
 
-### Activar por voz (Wake Word)
+### Por voz (wake phrase)
 
-1. El bridge escucha continuamente en segundo plano
-2. Di una wake phrase: **"Hermes"**, **"Oye Hermes"**, o **"Hey Hermes"**
-3. Escucharás un beep + "Escuchando..." (si feedback=both)
-4. Habla tu comando
-5. Al detectar silencio, transcribe y envía automáticamente
-6. Hermes responde en Telegram y (si sync=1) se lee en voz alta
+1. La app escucha en background
+2. Di **"Hermes"**, **"Oye Hermes"** o **"Hey Hermes"**
+3. Habla tu comando tras el feedback (beep/voz según config)
+4. Al detectar silencio: transcribe → envía → TTS si aplica
 
-### Activar por hotkey
+### Por hotkey
 
-1. Presiona `Ctrl+Shift+H` (o tu hotkey configurado)
-2. El bridge entra en modo escucha inmediatamente
-3. Habla tu comando
-4. El resto es igual que con wake word
+1. Pulsa `Ctrl+Shift+H` (o tu combinación)
+2. Habla el comando
+3. Mismo flujo que con wake phrase
 
-### Desktop App
+### Dashboard (React)
 
-```powershell
-python -B .\src\windows_hermes_voice_desktop.py
-```
+| Página | Función |
+|--------|---------|
+| **Home** | Estado de conexión, escucha, hotkey, actividad reciente |
+| **Chat** | Sesiones, mensajes, envío manual |
+| **Configure** | Wake phrases, micrófono, hotkeys, TTS |
+| **Settings** | API Hermes, overlay, autostart, idioma |
+| **Commands** | Biblioteca de comandos personalizados |
 
-**Pestañas:**
-- **General:** Wake phrases, feedback, autostart
-- **Audio:** Selección de micrófono, dispositivo de entrada
-- **Shortcuts:** Editor visual de hotkey (captura en tiempo real con pills animadas)
-- **Hermes:** Endpoint del webhook, configuración de auth refresh
-- **Session:** Login/logout, persistencia de sesión, refresh de tokens
-- **Logs:** Logs en tiempo real con filtros
+### Bandeja del sistema
 
-### Tray Icon
+- Click izquierdo → abre dashboard
+- Click derecho → micrófonos, pausa, comandos rápidos, settings, restart, quit
 
-Click derecho en el icono de Hermes en la bandeja del sistema:
+### Overlay
 
-```
-● Ready
-─────────────────
-Start Listening
-Stop Listening
-Open Hermes (Desktop)
-View Logs
-Settings
-Restart Services
-Quit
-```
+Pill flotante siempre visible (si está habilitado): estados idle, listening, thinking, speaking. Botones para abrir dashboard y activar micrófono.
 
 ---
 
-## Flujo de Datos
+## Flujo de datos
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Usuario   │     │   Audio     │     │   Bridge    │     │   Hermes    │
-│   habla     │────►│   Capture   │────►│   Engine    │────►│   Gateway   │
-└─────────────┘     └─────────────┘     └──────┬──────┘     └──────┬──────┘
-                                               │                    │
-                                               │ 1. Wake detect     │
-                                               │ 2. Record command  │
-                                               │ 3. Transcribe (whisper)
-                                               │ 4. POST to webhook │
-                                               │ 5. Await response  │
-                                               │ 6. TTS speak       │
-                                               │                    │
-                                        ┌──────▼──────┐     ┌──────▼──────┐
-                                        │   Event Bus │     │  Telegram   │
-                                        │   Signals   │────►│  (user)     │
-                                        └─────────────┘     └─────────────┘
+Usuario habla
+    → AudioService (sounddevice)
+    → WakePhraseManager / VoiceLoop (faster-whisper)
+    → WebviewBridge.send_message()
+    → HermesClient → VPS
+    → SQLite (mensaje usuario + respuesta)
+    → Evento hermes_new_message → React
+    → TTSService (si speak=true)
+    → Overlay + Tray actualizan estado
 ```
 
-### Estados del sistema (Event Bus)
-
-| Señal | Disparador | Descripción |
-|-------|-----------|-------------|
-| `audio.started` | Wake word detectada o hotkey presionado | Inicio de grabación |
-| `audio.stopped` | Silencio detectado | Fin de grabación |
-| `transcription.completed` | Whisper devuelve texto | Texto transcrito listo |
-| `hermes.response` | Webhook devuelve 200 | Respuesta recibida de Hermes |
-| `tts.started` | Inicio de síntesis de voz | Leyendo respuesta en voz alta |
-| `session.restored` | Al iniciar con sesión guardada | Sesión recuperada del disco |
-| `shortcut.updated` | Al cambiar hotkey | Nueva combinación guardada |
+Estados de escucha en runtime (`listening_state`): `idle`, `listening`, `thinking`, `processing`, `speaking`, `responding`.
 
 ---
 
-## Sesión Persistente
+## Build e instalador
 
-### ¿Por qué?
-
-Hermes asigna un `chat_id` a cada interacción. Sin identificación persistente, cada comando de voz crea un **chat nuevo** en Telegram. La sesión persistente agrupa todos tus comandos en el mismo thread.
-
-### ¿Cómo funciona?
-
-1. El usuario guarda credenciales en la Desktop App (pestaña Session)
-2. `SessionManager` guarda en `state/session.json` (datos públicos) y `state/session.secrets` (tokens)
-3. Al iniciar, `SessionManager.restore()` recupera la sesión
-4. En cada POST al webhook, se envía `user_id` + header `X-Request-ID`
-5. Hermes reconoce al usuario y continúa la conversación previa
-
-### Backend de refresh extensible
-
-```python
-# Local (default): extiende expiración localmente
-LocalRefreshBackend()
-
-# HTTP: llama a endpoint real de tu backend
-HttpRefreshBackend(
-    refresh_url="https://auth.hermes.example/refresh",
-    timeout=10,
-    extra_headers={"Authorization": "Bearer ..."},
-)
-```
-
-Configura via env vars:
-```env
-HERMES_AUTH_REFRESH_URL=https://tu-backend.com/api/refresh
-HERMES_AUTH_TIMEOUT=10
-HERMES_AUTH_HEADER=Authorization: Bearer static-token
-```
-
----
-
-## Empaquetado y Distribución
-
-### ZIP portable
+### Ejecutable portable (PyInstaller)
 
 ```powershell
-.\scripts\package_voice_bridge.ps1
+python build.py
+# → dist/HermesVoiceBridge/HermesVoiceBridge.exe
 ```
 
-Genera `dist/HermesVoiceBridge-windows.zip` — listo para descomprimir y ejecutar.
-
-### Instalador Windows (Inno Setup)
-
-Requisito: [Inno Setup](https://jrsoftware.org/isdl.php) instalado (`ISCC.exe` en PATH).
+### Instalador (distribución oficial)
 
 ```powershell
+python build.py
 .\scripts\build_installer.ps1
 ```
 
-Genera `dist/HermesVoiceBridge-setup.exe` — instalador profesional con:
-- Shortcut en Start Menu
-- Registro de desinstalación en Panel de Control
-- Icono de app
+Usa `setup.iss` en la raíz del repo. Requiere [Inno Setup](https://jrsoftware.org/isdl.php).
 
-### Autostart con Windows
-
-```powershell
-.\scripts\install_autostart.ps1
-```
-
-Crea:
-- Scheduled Task "Hermes Voice Bridge" (logon)
-- Shortcut en Startup folder
-- Persistencia de `voice.env` entre reinicios
-
-### Desinstalar
-
-```powershell
-.\scripts\uninstall_voice_bridge.ps1
-```
-
-Elimina:
-- Scheduled Task y shortcuts
-- Archivos de estado (`voice.env`, sesión, logs)
-- Procesos en ejecución
+Ver [docs/BUILD_NOTES.md](docs/BUILD_NOTES.md) para requisitos, troubleshooting y checklist post-build.
 
 ---
 
-## Desarrollo y Tests
-
-### Ejecutar tests
+## Tests
 
 ```powershell
 python -m pytest tests/ -v
 ```
 
-**Resultado actual:** 78 tests passing.
-
-### Estructura de tests
+**Estado actual:** 44 tests passing.
 
 ```
 tests/
-├── test_refactor_foundations.py      # Core: state, config, events, session
-├── test_windows_voice.py             # Bridge: post_json, submit_command, TTS
-├── test_windows_voice_control.py     # Mutex, tray process control
-├── test_windows_voice_desktop_models.py  # Desktop: theme, models
-├── test_windows_voice_desktop_support.py # Desktop: API client, palette
-├── test_windows_voice_overlay.py     # Overlays: signal mapping
-└── test_windows_voice_panel_api.py   # API local: endpoints, state, session
-```
-
-### Arquitectura de paquetes
-
-```
-src/hermes_voice_bridge/
-├── core/           # Lógica de negocio central
-│   ├── config/     # ConfigService (voice.env)
-│   ├── events/     # EventBus pub/sub
-│   ├── lifecycle/  # AppLifecycle (start, stop, restart)
-│   ├── logging/    # BridgeLogger (user, debug, crash logs)
-│   ├── session/    # SessionManager + auth backends
-│   └── state/      # AppStateStore (single source of truth)
-├── platform/       # Abstracciones de plataforma
-│   └── windows/    # SecureValueStore, single-instance mutex
-├── services/       # (próximamente: audio, wake, transcription, tts)
-├── storage/        # Persistencia
-│   ├── cache/      # RuntimeSignalStore, RuntimeStateStore
-│   └── repositories/  # JsonSessionRepository
-├── ui/             # Interfaz de usuario
-│   ├── desktop/    # ApiClient, theme, widgets
-│   ├── overlays/   # Status overlay (listening, transcribing, responding)
-│   └── settings/   # Models de configuración
-└── api/            # (próximamente: endpoints HTTP)
+├── test_phase1_smoke_pipeline.py
+├── test_voice_loop_concurrency.py
+├── test_webview_bridge_config_sync.py
+├── test_audio_service.py
+├── test_wake_phrase_manager.py
+├── test_tts_service_shutdown.py
+├── test_session_naming.py
+└── test_message_stats.py
 ```
 
 ---
 
-## Estructura del Proyecto
+## Estructura del proyecto
 
 ```
 hermes-windows-voice-bridge/
-<<<<<<< HEAD
 ├── docs/
-│   └── plans/
-│       └── 2026-05-24-native-refactor-plan.md   # Plan de refactorización
-├── panel-web/                                   # Legacy web panel (deprecated)
-│   ├── index.html
-│   ├── package.json
-│   └── src/
-=======
-├── CHANGELOG.md                        # Version history and project state
-├── docs/                               # (deprecated — see CHANGELOG.md)
-│   └── plans/                          # (empty — legacy plan docs removed)
->>>>>>> a6d2ecd (chore: update .gitignore, add CHANGELOG.md, fix README)
+│   ├── PLAN.md                 # Plan por fases
+│   ├── PROJECT_STATUS.md       # Estado actual
+│   ├── BUILD_NOTES.md          # Build + instalador
+│   └── PHASE1_VERIFICATION.md
 ├── scripts/
-│   ├── build_installer.ps1                      # Build Inno Setup installer
-│   ├── install_autostart.ps1                    # Configurar autostart Windows
-│   ├── package_voice_bridge.ps1                 # Generar ZIP portable
-│   ├── run_voice.ps1                            # Launch bridge directo
-│   ├── run_voice_desktop.ps1                    # Launch desktop app
-│   ├── run_voice_tray.ps1                       # Launch tray supervisor
-│   ├── run_voice_watchdog.ps1                   # Launch con auto-restart
-│   └── uninstall_voice_bridge.ps1               # Desinstalar completamente
+│   ├── run_desktop_app.ps1     # Dev: build UI + launch
+│   ├── build_installer.ps1     # PyInstaller + Inno Setup
+│   ├── install_autostart.ps1
+│   └── uninstall_voice_bridge.ps1
 ├── src/
-│   ├── hermes_voice_bridge/                     # Paquete Python principal
-│   │   ├── core/
-│   │   ├── platform/
-│   │   ├── storage/
-│   │   └── ui/
-│   ├── windows_hermes_voice.py                  # Bridge de voz principal
-│   ├── windows_hermes_voice_control.py          # Mutex, process control
-│   ├── windows_hermes_voice_desktop.py          # Desktop app (tkinter)
-│   ├── windows_hermes_voice_panel_api.py        # API local HTTP
-│   └── windows_hermes_voice_tray.py             # Tray supervisor
-├── state/                                       # Estado local (no commitear)
-│   ├── voice.env.example                        # Plantilla de configuración
-│   ├── logs/                                    # Logs de ejecución
-│   ├── session.json                             # Sesión persistida (generado)
-│   └── session.secrets                          # Tokens seguros (generado)
-├── tests/                                       # Suite de tests pytest
-├── .gitignore                                   # Excluye state/, node_modules/
-├── README.md                                    # Este archivo
-└── requirements.txt                             # Dependencias Python
+│   ├── api/
+│   │   └── webview_bridge.py   # Bridge Python ↔ React
+│   ├── core/                   # config, state, session, events
+│   ├── platform/
+│   │   ├── windows/
+│   │   │   ├── desktop_app.py  # ★ Entrypoint oficial
+│   │   │   ├── voice_loop.py
+│   │   │   └── overlay_service.py
+│   │   ├── tray/
+│   │   └── shortcuts/
+│   ├── services/               # audio, hermes, tts, wakeword, agent
+│   ├── storage/                # SQLite + cache
+│   └── ui/app/                 # React + Vite frontend
+├── tests/
+├── build.py                    # Build PyInstaller
+├── setup.iss                   # ★ Spec Inno Setup oficial
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
 ## Troubleshooting
 
-### "Set HERMES_WEBHOOK_SECRET to the route secret"
+### Hermes aparece offline en Home
 
-No has configurado el secreto del webhook. Obténlo del VPS:
-```bash
-hermes webhook list  # en el VPS
-```
+- Verifica `api_base_url` y `api_token` en Settings
+- Comprueba que el VPS responde: `GET {api_base_url}/api/health`
+- Revisa firewall entre tu PC y el puerto del API
 
-### "No se pudo enviar" (TTS feedback)
+### No hay icono en bandeja
 
-El bridge falló al hacer POST al webhook. Verifica:
-- `HERMES_WEBHOOK_URL` apunta a tu VPS correctamente
-- El gateway de Hermes está corriendo en el VPS
-- No hay firewall bloqueando el puerto 8644
+- La app puede estar arrancando (descarga del modelo Whisper la primera vez)
+- Revisa `%APPDATA%\HermesVoiceBridge\app.log`
 
-### "Port 8765 already in use"
+### UI en blanco
 
-Otra instancia del panel API ya está corriendo. Mata el proceso:
-```powershell
-Get-Process python | Where-Object {$_.MainWindowTitle -like "*Hermes*"} | Stop-Process
-```
+- Falta build de React: `cd src\ui\app && npm run build`
+- O usa `HERMES_UI_DEV=1` con `npm run dev` en paralelo
 
-### Tray icon no aparece
+### Wake phrase no detecta
 
-Verifica que `state/voice.env` existe y tiene `HERMES_WEBHOOK_URL` y `HERMES_WEBHOOK_SECRET`. Sin ellos, el bridge muere antes de que el tray se muestre.
+- Ajusta `wake_energy` en config (default `0.008`)
+- Confirma el micrófono correcto en Configure
+- Prueba activación por hotkey para aislar el problema
+
+### Hotkey no responde
+
+- Otra app puede tener la misma combinación
+- Guarda de nuevo en Configure; el bridge reinicia el registro de shortcuts
+- Revisa toasts de error en la UI
 
 ### Modelo Whisper no descarga
 
-La primera ejecución descarga el modelo Whisper desde HuggingFace. Si falla:
 ```powershell
-$env:HF_HUB_OFFLINE=0
-python .\src\windows_hermes_voice.py
+$env:HF_HUB_OFFLINE = "0"
+python -B src\platform\windows\desktop_app.py
 ```
 
-### Wake word no detecta
+### Build falla: `HermesVoiceBridge.spec` not found
 
-- Sube `HERMES_WAKE_ENERGY` (default 0.008) si es muy sensible
-- Verifica que `HERMES_MIC_DEVICE` apunta al micrófono correcto
-- Lista dispositivos: `python .\src\windows_hermes_voice.py --list-devices`
+El spec puede estar en `.gitignore`. Consulta [docs/BUILD_NOTES.md](docs/BUILD_NOTES.md).
 
 ---
 
 ## Roadmap
 
-- [x] Wake word por STT local
+### Completado
+
+- [x] Wake phrase por STT local
 - [x] Hotkey global configurable
-- [x] Transcripción con faster-whisper
-- [x] TTS local con pyttsx3/SAPI5
-- [x] Tray icon con menú contextual
-- [x] Desktop app con pestañas
-- [x] Sesión persistente con refresh backend
-- [x] API local HTTP
-- [x] Overlay de estado visual
-- [x] Tests automatizados (78 passing)
-- [x] ZIP portable + Inno Setup installer
-- [x] Autostart con Windows
-- [ ] Wake word engine dedicado (Porcupine/OpenWakeWord)
-- [ ] Separación de voces por idioma (español/inglés nativo)
-- [ ] Soporte para múltiples perfiles de usuario
-- [ ] Plugin de acciones del sistema (abrir apps, controlar volumen, etc.)
+- [x] Transcripción faster-whisper
+- [x] TTS local
+- [x] Tray + overlay + dashboard React
+- [x] Sesiones SQLite + sync VPS
+- [x] Comandos personalizados
+- [x] Build PyInstaller + spec Inno Setup
+- [x] 43 tests automatizados
+
+### En progreso / planificado
+
+- [x] Documentación alineada (Fase 1)
+- [x] Limpieza código legacy tkinter (Fase 2)
+- [x] Stats reales en dashboard Home (Fase 3)
+- [ ] Instalador reproducible end-to-end (Fase 4)
+- [ ] Wake engine dedicado (Porcupine / OpenWakeWord)
+- [ ] Voces TTS nativas por idioma
+- [ ] Múltiples perfiles de usuario
 
 ---
 
@@ -622,4 +480,4 @@ python .\src\windows_hermes_voice.py
 
 MIT © César Suárez / ceradev
 
-Este es un plugin no oficial para [Hermes Agent](https://github.com/nousresearch/hermes-agent) de Nous Research. No está afiliado ni respaldado oficialmente por Nous Research.
+Plugin no oficial para [Hermes Agent](https://github.com/nousresearch/hermes-agent) (Nous Research). Sin afiliación ni respaldo oficial.
